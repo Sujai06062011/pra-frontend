@@ -1,0 +1,205 @@
+import { useState, useEffect, useCallback, useRef } from "react";
+import { api, type DashboardStats, type QueueStatus, type Appointment, type Patient, type Prescription, type FollowUp, type Query, type Review } from "../lib/api";
+import { subscribeToQueue, subscribeToPatients, subscribeToQueries } from "../lib/supabase";
+import { useAuth } from "../context/AuthContext";
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+type HookResult<T> = { data: T; loading: boolean; error: string | null; refetch: () => void };
+
+function useApiData<T>(fetcher: () => Promise<T>, defaultValue: T): HookResult<T> {
+  const [data, setData] = useState<T>(defaultValue);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await fetcher();
+      setData(result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  return { data, loading, error, refetch: fetch };
+}
+
+export function useDashboardStats() {
+  const { doctorId } = useAuth();
+  return useApiData<DashboardStats>(
+    () => api.dashboard.getStats(doctorId),
+    {
+      today_appointments: 0,
+      current_token: 0,
+      total_patients: 0,
+      pending_followups: 0,
+      today_completed: 0,
+      weekly_appointments: [],
+      top_diagnoses: [],
+    }
+  );
+}
+
+export function useQueue() {
+  const { doctorId } = useAuth();
+  const [data, setData] = useState<QueueStatus>({
+    current_token: 0,
+    total_today: 0,
+    waiting: 0,
+    completed: 0,
+    appointments: [],
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await api.queue.status(doctorId, today());
+      setData(result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }, [doctorId]);
+
+  useEffect(() => {
+    fetchData();
+    const unsub = subscribeToQueue(doctorId, today(), fetchData);
+    return unsub;
+  }, [fetchData, doctorId]);
+
+  const callNext = useCallback(async () => {
+    await api.queue.callNext(doctorId);
+    fetchData();
+  }, [doctorId, fetchData]);
+
+  const setToken = useCallback(async (token: number) => {
+    await api.queue.setToken(doctorId, token);
+    fetchData();
+  }, [doctorId, fetchData]);
+
+  return { data, loading, error, refetch: fetchData, callNext, setToken };
+}
+
+export function useAppointments(date?: string) {
+  const { doctorId } = useAuth();
+  return useApiData<Appointment[]>(
+    () => api.appointments.list(doctorId, date),
+    []
+  );
+}
+
+export function useTodayAppointments() {
+  const { doctorId } = useAuth();
+  return useApiData<Appointment[]>(
+    () => api.appointments.today(doctorId),
+    []
+  );
+}
+
+export function usePatients(search?: string) {
+  const { doctorId } = useAuth();
+  const [data, setData] = useState<Patient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await api.patients.list(doctorId, search);
+      setData(result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }, [doctorId, search]);
+
+  useEffect(() => {
+    fetchData();
+    const unsub = subscribeToPatients(doctorId, fetchData);
+    return unsub;
+  }, [fetchData, doctorId]);
+
+  return { data, loading, error, refetch: fetchData };
+}
+
+export function usePrescriptions(patientId?: string) {
+  const { doctorId } = useAuth();
+  return useApiData<Prescription[]>(
+    () => api.prescriptions.list(doctorId, patientId),
+    []
+  );
+}
+
+export function useFollowUps() {
+  const { doctorId } = useAuth();
+  const hook = useApiData<FollowUp[]>(
+    () => api.followups.list(doctorId),
+    []
+  );
+
+  const triggerWhatsapp = useCallback(async () => {
+    await api.followups.triggerWhatsapp();
+    hook.refetch();
+  }, [hook.refetch]);
+
+  const triggerCalls = useCallback(async () => {
+    await api.followups.triggerCalls();
+    hook.refetch();
+  }, [hook.refetch]);
+
+  return { ...hook, triggerWhatsapp, triggerCalls };
+}
+
+export function useQueries() {
+  const { doctorId } = useAuth();
+  const [data, setData] = useState<Query[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await api.queries.list(doctorId);
+      setData(result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  }, [doctorId]);
+
+  useEffect(() => {
+    fetchData();
+    const unsub = subscribeToQueries(doctorId, fetchData);
+    return unsub;
+  }, [fetchData, doctorId]);
+
+  const answer = useCallback(async (id: string, text: string) => {
+    await api.queries.answer(id, text);
+    fetchData();
+  }, [fetchData]);
+
+  const unreadCount = data.filter((q) => q.status === "pending").length;
+
+  return { data, loading, error, refetch: fetchData, answer, unreadCount };
+}
+
+export function useReviews() {
+  const { doctorId } = useAuth();
+  return useApiData<Review[]>(() => api.reviews.list(doctorId), []);
+}

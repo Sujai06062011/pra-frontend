@@ -3,28 +3,13 @@ import type { Page } from "../Sidebar";
 import {
   CalendarDays, Hash, Pill, Phone, FlaskConical, MessageCircle,
   TrendingUp, TrendingDown, ChevronRight, AlertTriangle, X,
-  CheckCircle2, Clock, XCircle, ArrowRight, Activity
+  CheckCircle2, Clock, XCircle, ArrowRight, Activity, RefreshCw
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from "recharts";
-
-const weekData = [
-  { day: "Mon", appointments: 8, walkins: 3, completed: 9 },
-  { day: "Tue", appointments: 11, walkins: 5, completed: 13 },
-  { day: "Wed", appointments: 9, walkins: 4, completed: 11 },
-  { day: "Thu", appointments: 12, walkins: 6, completed: 14 },
-  { day: "Fri", appointments: 0, walkins: 0, completed: 0 },
-  { day: "Sat", appointments: 0, walkins: 0, completed: 0 },
-];
-
-const monthTrend = [
-  { week: "Wk 1", patients: 42 },
-  { week: "Wk 2", patients: 56 },
-  { week: "Wk 3", patients: 48 },
-  { week: "Wk 4", patients: 67 },
-];
+import { useDashboardStats, useTodayAppointments } from "../../../hooks/usePRAData";
 
 const visitTypes = [
   { name: "Follow-up", value: 45, color: "#10b981" },
@@ -33,18 +18,15 @@ const visitTypes = [
   { name: "Emergency", value: 10, color: "#f43f5e" },
 ];
 
-const appointments = [
-  { token: 3, name: "Sujaikumar", age: 43, gender: "M", time: "9:30 AM", status: "done", color: "from-violet-400 to-purple-500" },
-  { token: 4, name: "Poornima", age: 43, gender: "F", time: "9:45 AM", status: "done", color: "from-pink-400 to-rose-500" },
-  { token: 5, name: "Rajesh Kumar", age: 35, gender: "M", time: "10:00 AM", status: "in-progress", color: "from-sky-400 to-blue-500" },
-  { token: 6, name: "Ananya Devi", age: 28, gender: "F", time: "10:15 AM", status: "waiting", color: "from-emerald-400 to-teal-500" },
-  { token: 7, name: "Mohammed Ali", age: 52, gender: "M", time: "10:30 AM", status: "waiting", color: "from-amber-400 to-orange-500" },
-];
-
 const attentionItems = [
   { name: "Kavitha S.", sub: "No response · 3 days overdue", type: "call", urgency: "red" },
   { name: "Dinesh R.", sub: "Requested appointment booking", type: "book", urgency: "amber" },
   { name: "Meena T.", sub: "No response · 2 days overdue", type: "call", urgency: "red" },
+];
+
+const avatarColors = [
+  "from-violet-400 to-purple-500", "from-pink-400 to-rose-500", "from-sky-400 to-blue-500",
+  "from-emerald-400 to-teal-500", "from-amber-400 to-orange-500", "from-cyan-400 to-sky-500",
 ];
 
 const statusConfig = {
@@ -112,21 +94,38 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void }) {
   const [alertVisible, setAlertVisible] = useState(true);
   const [activeTab, setActiveTab] = useState<"today" | "week" | "month">("today");
-  const [queueToken, setQueueToken] = useState(5);
+  const { data: stats, loading: statsLoading, error: statsError, refetch: refetchStats } = useDashboardStats();
+  const { data: todayAppts, loading: apptsLoading, error: apptsError } = useTodayAppointments();
+
+  const weekData = stats.weekly_appointments.map((d) => ({
+    day: new Date(d.date).toLocaleDateString("en-US", { weekday: "short" }),
+    appointments: d.count,
+    walkins: 0,
+    completed: 0,
+  }));
 
   return (
     <div className="p-7 space-y-6">
 
+      {/* Error banner */}
+      {(statsError || apptsError) && (
+        <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
+          <AlertTriangle size={16} className="text-rose-600 flex-shrink-0" />
+          <p className="flex-1 text-[13px] text-rose-700">Failed to load dashboard data.</p>
+          <button onClick={refetchStats} className="flex items-center gap-1 text-[12px] font-semibold text-rose-600 hover:text-rose-700">
+            <RefreshCw size={13} /> Retry
+          </button>
+        </div>
+      )}
+
       {/* Alert bar */}
-      {alertVisible && (
+      {alertVisible && stats.pending_followups > 0 && (
         <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
           <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
             <AlertTriangle size={16} className="text-amber-600" />
           </div>
           <p className="flex-1 text-[13px] text-slate-700">
-            <span className="font-semibold text-amber-700">3 patients</span> have not responded to follow-up calls ·{" "}
-            <span className="font-semibold text-amber-700">2 prescriptions</span> ending today ·{" "}
-            <span className="font-semibold text-amber-700">5 queries</span> awaiting doctor reply
+            <span className="font-semibold text-amber-700">{stats.pending_followups} follow-ups</span> pending
           </p>
           <button onClick={() => setAlertVisible(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
             <X size={16} />
@@ -156,13 +155,13 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
         <StatCard
           icon={<CalendarDays size={20} className="text-emerald-600" />}
           title="Today's Appointments"
-          value={12}
+          value={statsLoading ? "—" : stats.today_appointments}
           unit="total"
           accent="bg-gradient-to-r from-emerald-400 to-teal-400"
           accentBg="bg-emerald-50"
           details={[
-            { dot: "bg-emerald-500", label: "10 Confirmed" },
-            { dot: "bg-rose-500", label: "2 Cancelled" },
+            { dot: "bg-emerald-500", label: `${statsLoading ? "—" : stats.today_completed} Completed` },
+            { dot: "bg-rose-500", label: `${statsLoading ? "—" : stats.today_appointments - stats.today_completed} Remaining` },
           ]}
         />
 
@@ -179,12 +178,15 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
             <div className="text-center">
               <div className="text-[10px] uppercase tracking-widest text-slate-400 mb-1">Now Serving</div>
               <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 44, lineHeight: 1, color: "#10b981" }} className="drop-shadow-sm">
-                {queueToken}
+                {statsLoading ? "—" : stats.current_token}
               </div>
             </div>
             <div className="w-px h-14 bg-slate-100" />
             <div className="flex-1 space-y-1.5">
-              {[{ l: "Waiting", v: "7 patients" }, { l: "Avg Wait", v: "~35 mins" }, { l: "Total Today", v: "12 tokens" }].map((s) => (
+              {[
+                { l: "Total Today", v: statsLoading ? "—" : `${stats.today_appointments} tokens` },
+                { l: "Completed", v: statsLoading ? "—" : `${stats.today_completed}` },
+              ].map((s) => (
                 <div key={s.l} className="flex justify-between text-[12px]">
                   <span className="text-slate-400">{s.l}</span>
                   <span className="font-semibold text-slate-700">{s.v}</span>
@@ -192,33 +194,24 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
               ))}
             </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setQueueToken((t) => Math.max(1, t - 1))}
-              className="px-3 py-1.5 text-[12px] font-semibold border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50 transition-colors"
-            >
-              ← Prev
-            </button>
-            <button
-              onClick={() => setQueueToken((t) => t + 1)}
-              className="flex-1 py-1.5 text-[12px] font-semibold bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg shadow-sm shadow-emerald-200 transition-colors"
-            >
-              Next Token →
-            </button>
-          </div>
+          <button
+            onClick={() => onNavigate?.("queue")}
+            className="w-full py-1.5 text-[12px] font-semibold bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg shadow-sm shadow-emerald-200 transition-colors"
+          >
+            Manage Queue →
+          </button>
         </div>
 
-        {/* Medicine Alerts */}
+        {/* Total Patients */}
         <StatCard
-          icon={<Pill size={20} className="text-amber-600" />}
-          title="Medicine Alerts"
-          value={5}
-          unit="active"
-          accent="bg-gradient-to-r from-amber-400 to-orange-400"
-          accentBg="bg-amber-50"
+          icon={<Phone size={20} className="text-violet-600" />}
+          title="Total Patients"
+          value={statsLoading ? "—" : stats.total_patients}
+          unit="registered"
+          accent="bg-gradient-to-r from-violet-400 to-purple-400"
+          accentBg="bg-violet-50"
           details={[
-            { dot: "bg-rose-500", label: "2 Ending Today" },
-            { dot: "bg-amber-500", label: "3 Tomorrow" },
+            { dot: "bg-violet-500", label: `${statsLoading ? "—" : stats.pending_followups} follow-ups pending` },
           ]}
         />
 
@@ -226,14 +219,12 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
         <StatCard
           icon={<Phone size={20} className="text-violet-600" />}
           title="Post-Visit Follow-ups"
-          value={8}
+          value={statsLoading ? "—" : stats.pending_followups}
           unit="pending"
           accent="bg-gradient-to-r from-violet-400 to-purple-400"
           accentBg="bg-violet-50"
           details={[
-            { dot: "bg-rose-500", label: "3 No Response" },
-            { dot: "bg-amber-500", label: "2 Needs Appt" },
-            { dot: "bg-emerald-500", label: "15 Resolved" },
+            { dot: "bg-rose-500", label: "Pending action" },
           ]}
         />
 
@@ -241,13 +232,12 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
         <StatCard
           icon={<FlaskConical size={20} className="text-blue-600" />}
           title="Lab Reports"
-          value={7}
+          value="—"
           unit="pending review"
           accent="bg-gradient-to-r from-blue-400 to-sky-400"
           accentBg="bg-blue-50"
           details={[
-            { dot: "bg-blue-500", label: "3 New Today" },
-            { dot: "bg-emerald-500", label: "24 Reviewed" },
+            { dot: "bg-blue-500", label: "Coming soon" },
           ]}
         />
 
@@ -255,13 +245,12 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
         <StatCard
           icon={<MessageCircle size={20} className="text-rose-600" />}
           title="Patient Queries"
-          value={5}
+          value="—"
           unit="unanswered"
           accent="bg-gradient-to-r from-rose-400 to-pink-400"
           accentBg="bg-rose-50"
           details={[
-            { dot: "bg-rose-500", label: "2 New Today" },
-            { dot: "bg-emerald-500", label: "12 Answered" },
+            { dot: "bg-rose-500", label: "Check queries tab" },
           ]}
         />
       </div>
@@ -285,10 +274,13 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
               See all <ArrowRight size={13} />
             </button>
           </div>
+          {apptsLoading ? (
+            <div className="px-5 py-8 text-center text-[13px] text-slate-400">Loading appointments…</div>
+          ) : (
           <table className="w-full">
             <thead>
               <tr className="bg-slate-50/60">
-                {["Token", "Patient", "Time", "Status", "Action"].map((h) => (
+                {["Token", "Patient", "Status", "Action"].map((h) => (
                   <th key={h} className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-slate-400 px-5 py-3 border-b border-slate-100">
                     {h}
                   </th>
@@ -296,39 +288,41 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
               </tr>
             </thead>
             <tbody>
-              {appointments.map((apt) => {
-                const s = statusConfig[apt.status as keyof typeof statusConfig];
+              {(todayAppts.length === 0) ? (
+                <tr><td colSpan={4} className="px-5 py-8 text-center text-[13px] text-slate-400">No appointments today</td></tr>
+              ) : todayAppts.slice(0, 5).map((apt, idx) => {
+                const patientName = apt.patients?.name || "Unknown";
+                const patientAge = apt.patients?.age;
+                const statusMap = { scheduled: "waiting", completed: "done", cancelled: "cancelled", no_show: "cancelled" } as const;
+                const mappedStatus = statusMap[apt.status] || "waiting";
+                const s = statusConfig[mappedStatus as keyof typeof statusConfig];
+                const color = avatarColors[idx % avatarColors.length];
                 return (
-                  <tr key={apt.token} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors cursor-pointer group">
+                  <tr key={apt.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors cursor-pointer group">
                     <td className="px-5 py-3.5">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold ${apt.status === "in-progress" ? "bg-emerald-500 text-white shadow-sm shadow-emerald-200" : "bg-slate-100 text-slate-600"}`}>
-                        {apt.token}
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold bg-slate-100 text-slate-600`}>
+                        {apt.token_number ?? "—"}
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2.5">
-                        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${apt.color} flex items-center justify-center text-white text-[12px] font-bold shadow-sm`}>
-                          {apt.name[0]}
+                        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center text-white text-[12px] font-bold shadow-sm`}>
+                          {patientName[0]}
                         </div>
                         <div>
-                          <div className="text-[13px] font-medium text-slate-800">{apt.name}</div>
-                          <div className="text-[11px] text-slate-400">{apt.age} yrs · {apt.gender === "M" ? "Male" : "Female"}</div>
+                          <div className="text-[13px] font-medium text-slate-800">{patientName}</div>
+                          {patientAge && <div className="text-[11px] text-slate-400">{patientAge} yrs</div>}
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 text-[12px] text-slate-500">{apt.time}</td>
                     <td className="px-5 py-3.5">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${s.cls}`}>
                         {s.icon}{s.label}
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <button className={`text-[11px] font-semibold px-3 py-1 rounded-lg border transition-all ${
-                        apt.status === "in-progress"
-                          ? "border-emerald-300 text-emerald-600 hover:bg-emerald-50"
-                          : "border-slate-200 text-slate-500 hover:border-emerald-300 hover:text-emerald-600"
-                      }`}>
-                        {apt.status === "in-progress" ? "Prescribe" : "View"}
+                      <button className="text-[11px] font-semibold px-3 py-1 rounded-lg border border-slate-200 text-slate-500 hover:border-emerald-300 hover:text-emerald-600 transition-all">
+                        View
                       </button>
                     </td>
                   </tr>
@@ -336,6 +330,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
               })}
             </tbody>
           </table>
+          )}
         </div>
 
         {/* Right panels */}

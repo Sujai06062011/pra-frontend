@@ -1,0 +1,232 @@
+const BASE_URL = import.meta.env.VITE_API_URL as string;
+
+export interface Patient {
+  id: string;
+  doctor_id: string;
+  name: string;
+  mobile: string;
+  age?: number;
+  gender?: string;
+  patient_code?: string;
+  family_head_mobile?: string;
+  language?: string;
+  created_at: string;
+}
+
+export interface Appointment {
+  id: string;
+  doctor_id: string;
+  patient_id: string;
+  appointment_date: string;
+  token_number?: number;
+  status: "scheduled" | "completed" | "cancelled" | "no_show";
+  patients?: Patient;
+  created_at: string;
+}
+
+export interface Token {
+  doctor_id: string;
+  appointment_date: string;
+  current_token: number;
+}
+
+export interface Medicine {
+  name: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+}
+
+export interface Prescription {
+  id: string;
+  doctor_id: string;
+  patient_id: string;
+  diagnosis?: string;
+  medicines?: Medicine[];
+  is_active: boolean;
+  start_date?: string;
+  end_date?: string;
+  created_at: string;
+  patients?: Pick<Patient, "name" | "mobile" | "patient_code">;
+}
+
+export interface FollowUp {
+  id: string;
+  doctor_id: string;
+  patient_id: string;
+  status: "pending" | "completed" | "no_response";
+  created_at: string;
+  patients?: Pick<Patient, "name" | "mobile" | "language">;
+}
+
+export interface Review {
+  id: string;
+  doctor_id: string;
+  patient_id: string;
+  review_sent_at: string;
+  patients?: Pick<Patient, "name" | "mobile">;
+}
+
+export interface DashboardStats {
+  today_appointments: number;
+  current_token: number;
+  total_patients: number;
+  pending_followups: number;
+  today_completed: number;
+  weekly_appointments: { date: string; count: number }[];
+  top_diagnoses: { diagnosis: string; count: number }[];
+}
+
+export interface QueueStatus {
+  current_token: number;
+  total_today: number;
+  waiting: number;
+  completed: number;
+  appointments: Appointment[];
+}
+
+export interface Doctor {
+  id: string;
+  name: string;
+  clinic_name: string;
+  whatsapp_number?: string;
+  clinic_timings?: string;
+  clinic_address?: string;
+  email?: string;
+  mobile?: string;
+}
+
+export interface Query {
+  id: string;
+  doctor_id: string;
+  patient_id: string;
+  question: string;
+  answer?: string;
+  status: "pending" | "answered";
+  answered_at?: string;
+  created_at: string;
+  patients?: Pick<Patient, "name" | "mobile">;
+}
+
+async function req<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}: ${path}`);
+  return res.json();
+}
+
+export const api = {
+  dashboard: {
+    getStats: (doctorId: string) =>
+      req<DashboardStats>(`/dashboard/stats?doctor_id=${doctorId}`),
+  },
+
+  patients: {
+    list: (doctorId: string, search?: string) => {
+      const params = new URLSearchParams({ doctor_id: doctorId });
+      if (search) params.set("search", search);
+      return req<Patient[]>(`/patients?${params}`);
+    },
+    get: (id: string) => req<Patient>(`/patients/${id}`),
+    getFamilyMembers: (headMobile: string) =>
+      req<Patient[]>(`/patients/family/${headMobile}`),
+  },
+
+  appointments: {
+    list: (doctorId: string, date?: string) => {
+      const params = new URLSearchParams({ doctor_id: doctorId });
+      if (date) params.set("date", date);
+      return req<Appointment[]>(`/appointments?${params}`);
+    },
+    today: (doctorId: string) =>
+      req<Appointment[]>(`/appointments/today?doctor_id=${doctorId}`),
+    updateStatus: (id: string, status: Appointment["status"]) =>
+      req<Appointment>(`/appointments/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      }),
+  },
+
+  queue: {
+    status: (doctorId: string, date?: string) => {
+      const params = new URLSearchParams({ doctor_id: doctorId });
+      if (date) params.set("date", date);
+      return req<QueueStatus>(`/queue/status?${params}`);
+    },
+    callNext: (doctorId: string) =>
+      req<{ token: number }>("/queue/next", {
+        method: "POST",
+        body: JSON.stringify({ doctor_id: doctorId }),
+      }),
+    setToken: (doctorId: string, token: number) =>
+      req<{ token: number }>("/queue/set-token", {
+        method: "POST",
+        body: JSON.stringify({ doctor_id: doctorId, token }),
+      }),
+  },
+
+  prescriptions: {
+    list: (doctorId: string, patientId?: string) => {
+      const params = new URLSearchParams({ doctor_id: doctorId });
+      if (patientId) params.set("patient_id", patientId);
+      return req<Prescription[]>(`/prescriptions?${params}`);
+    },
+    create: (data: Partial<Prescription>) =>
+      req<Prescription>("/prescriptions", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    getActive: (doctorId: string) =>
+      req<Prescription[]>(`/prescriptions/active?doctor_id=${doctorId}`),
+  },
+
+  followups: {
+    list: (doctorId: string) =>
+      req<FollowUp[]>(`/followups?doctor_id=${doctorId}`),
+    pending: (doctorId: string) =>
+      req<FollowUp[]>(`/followups/pending?doctor_id=${doctorId}`),
+    triggerWhatsapp: () =>
+      req<{ status: string }>("/trigger/followup-whatsapp", { method: "POST" }),
+    triggerCalls: () =>
+      req<{ status: string }>("/trigger/followup-calls", { method: "POST" }),
+  },
+
+  queries: {
+    list: (doctorId: string) =>
+      req<Query[]>(`/queries?doctor_id=${doctorId}`),
+    pending: (doctorId: string) =>
+      req<Query[]>(`/queries/pending?doctor_id=${doctorId}`),
+    answer: (id: string, answer: string) =>
+      req<Query>(`/queries/${id}/answer`, {
+        method: "PATCH",
+        body: JSON.stringify({ answer }),
+      }),
+  },
+
+  reviews: {
+    list: (doctorId: string) =>
+      req<Review[]>(`/reviews?doctor_id=${doctorId}`),
+  },
+
+  doctor: {
+    get: (doctorId: string) => req<Doctor>(`/doctor/${doctorId}`),
+    update: (doctorId: string, data: Partial<Doctor>) =>
+      req<Doctor>(`/doctor/${doctorId}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+  },
+
+  triggers: {
+    morningReminders: () =>
+      req<{ status: string }>("/trigger/morning-reminders", { method: "POST" }),
+    eveningReminders: () =>
+      req<{ status: string }>("/trigger/evening-reminders", { method: "POST" }),
+    visitSummary: () =>
+      req<{ status: string }>("/trigger/visit-summary", { method: "POST" }),
+    reviewRequests: () =>
+      req<{ status: string }>("/trigger/review-requests", { method: "POST" }),
+  },
+};
