@@ -8,7 +8,7 @@ const avatarColors = [
 ];
 
 export function Queue() {
-  const { data, loading, error, refetch, callNext, setToken } = useQueue();
+  const { data, loading, error, refetch, callNext, callPrev } = useQueue();
   const current = data.current_token;
   const currentPatient = data.appointments.find(p => p.token_number === current);
 
@@ -38,7 +38,7 @@ export function Queue() {
           )}
           <div className="flex gap-3 mt-4 w-full">
             <button
-              onClick={() => current > 1 && setToken(current - 1)}
+              onClick={() => callPrev()}
               className="flex-1 flex items-center justify-center gap-1 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white text-[13px] font-semibold transition-colors"
             >
               <ChevronLeft size={16} /> Prev

@@ -153,9 +153,11 @@ export const api = {
   },
 
   appointments: {
-    list: (doctorId: string, date?: string) => {
+    list: (doctorId: string, date?: string, dateFrom?: string, dateTo?: string) => {
       const params = new URLSearchParams({ doctor_id: doctorId });
       if (date) params.set("date", date);
+      if (dateFrom) params.set("date_from", dateFrom);
+      if (dateTo)   params.set("date_to",   dateTo);
       return req<Appointment[]>(`/appointments?${params}`);
     },
     today: (doctorId: string) =>
@@ -175,6 +177,11 @@ export const api = {
     },
     callNext: (doctorId: string) =>
       req<{ token: number }>("/queue/next", {
+        method: "POST",
+        body: JSON.stringify({ doctor_id: doctorId }),
+      }),
+    callPrev: (doctorId: string) =>
+      req<{ token: number }>("/queue/prev", {
         method: "POST",
         body: JSON.stringify({ doctor_id: doctorId }),
       }),

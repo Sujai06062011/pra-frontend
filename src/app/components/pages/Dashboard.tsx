@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import type { Page } from "../Sidebar";
 import {
   CalendarDays, Hash, Pill, Phone, FlaskConical, MessageCircle,
@@ -9,7 +9,9 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from "recharts";
-import { useDashboardStats, useTodayAppointments, useQueries, useFollowUps } from "../../../hooks/usePRAData";
+import { useDashboardStats, useAppointments, useTodayAppointments, useQueries, useFollowUps } from "../../../hooks/usePRAData";
+import { useAuth } from "../../../context/AuthContext";
+import { api } from "../../../lib/api";
 
 const visitTypes = [
   { name: "Follow-up", value: 45, color: "#10b981" },
@@ -86,11 +88,39 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+// Date helpers
+function getWeekRange() {
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun
+  const diffToMon = (day === 0 ? -6 : 1 - day);
+  const mon = new Date(now); mon.setDate(now.getDate() + diffToMon); mon.setHours(0,0,0,0);
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  return { from: mon.toISOString().slice(0,10), to: sun.toISOString().slice(0,10) };
+}
+function getMonthRange() {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+  const to   = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0,10);
+  return { from, to };
+}
+
 export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void }) {
+  const { doctorId } = useAuth();
   const [alertVisible, setAlertVisible] = useState(true);
   const [activeTab, setActiveTab] = useState<"today" | "week" | "month">("today");
+
   const { data: stats, loading: statsLoading, error: statsError, refetch: refetchStats } = useDashboardStats();
   const { data: todayAppts, loading: apptsLoading, error: apptsError } = useTodayAppointments();
+
+  // Range-filtered appointments for week/month tabs
+  const week  = getWeekRange();
+  const month = getMonthRange();
+  const { data: weekAppts,  loading: weekLoading  } = useAppointments(undefined, week.from,  week.to);
+  const { data: monthAppts, loading: monthAppts2 } = useAppointments(undefined, month.from, month.to);
+
+  const tabAppts   = activeTab === "today" ? todayAppts  : activeTab === "week" ? weekAppts  : monthAppts;
+  const tabLoading = activeTab === "today" ? apptsLoading : activeTab === "week" ? weekLoading : monthAppts2;
+
   const { data: queries } = useQueries();
   const { data: followUps } = useFollowUps();
 
@@ -104,6 +134,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
     walkins: 0,
     completed: 0,
   }));
+
+  const tabLabel = activeTab === "today" ? "Today" : activeTab === "week" ? "This Week" : "This Month";
+  const tabCount = tabAppts.length;
 
   return (
     <div className="p-7 space-y-6">
@@ -153,18 +186,20 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
       <div className="grid grid-cols-3 gap-4">
 
         {/* Appointments */}
-        <StatCard
-          icon={<CalendarDays size={20} className="text-emerald-600" />}
-          title="Today's Appointments"
-          value={statsLoading ? "—" : stats.today_appointments}
-          unit="total"
-          accent="bg-gradient-to-r from-emerald-400 to-teal-400"
-          accentBg="bg-emerald-50"
-          details={[
-            { dot: "bg-emerald-500", label: `${statsLoading ? "—" : stats.today_completed} Completed` },
-            { dot: "bg-rose-500", label: `${statsLoading ? "—" : stats.today_appointments - stats.today_completed} Remaining` },
-          ]}
-        />
+        <div onClick={() => onNavigate?.("appointments")} className="cursor-pointer">
+          <StatCard
+            icon={<CalendarDays size={20} className="text-emerald-600" />}
+            title="Today's Appointments"
+            value={statsLoading ? "—" : stats.today_appointments}
+            unit="total"
+            accent="bg-gradient-to-r from-emerald-400 to-teal-400"
+            accentBg="bg-emerald-50"
+            details={[
+              { dot: "bg-emerald-500", label: `${statsLoading ? "—" : stats.today_completed} Completed` },
+              { dot: "bg-rose-500", label: `${statsLoading ? "—" : stats.today_appointments - stats.today_completed} Remaining` },
+            ]}
+          />
+        </div>
 
         {/* Live Queue */}
         <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden cursor-pointer">
@@ -204,30 +239,34 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
         </div>
 
         {/* Total Patients */}
-        <StatCard
-          icon={<Phone size={20} className="text-violet-600" />}
-          title="Total Patients"
-          value={statsLoading ? "—" : stats.total_patients}
-          unit="registered"
-          accent="bg-gradient-to-r from-violet-400 to-purple-400"
-          accentBg="bg-violet-50"
-          details={[
-            { dot: "bg-violet-500", label: `${statsLoading ? "—" : stats.pending_followups} follow-ups pending` },
-          ]}
-        />
+        <div onClick={() => onNavigate?.("patients")} className="cursor-pointer">
+          <StatCard
+            icon={<Phone size={20} className="text-violet-600" />}
+            title="Total Patients"
+            value={statsLoading ? "—" : stats.total_patients}
+            unit="registered"
+            accent="bg-gradient-to-r from-violet-400 to-purple-400"
+            accentBg="bg-violet-50"
+            details={[
+              { dot: "bg-violet-500", label: `${statsLoading ? "—" : stats.pending_followups} follow-ups pending` },
+            ]}
+          />
+        </div>
 
         {/* Follow-ups */}
-        <StatCard
-          icon={<Phone size={20} className="text-violet-600" />}
-          title="Post-Visit Follow-ups"
-          value={statsLoading ? "—" : stats.pending_followups}
-          unit="pending"
-          accent="bg-gradient-to-r from-violet-400 to-purple-400"
-          accentBg="bg-violet-50"
-          details={[
-            { dot: "bg-rose-500", label: "Pending action" },
-          ]}
-        />
+        <div onClick={() => onNavigate?.("followups")} className="cursor-pointer">
+          <StatCard
+            icon={<Phone size={20} className="text-violet-600" />}
+            title="Post-Visit Follow-ups"
+            value={statsLoading ? "—" : stats.pending_followups}
+            unit="pending"
+            accent="bg-gradient-to-r from-violet-400 to-purple-400"
+            accentBg="bg-violet-50"
+            details={[
+              { dot: "bg-rose-500", label: "Pending action" },
+            ]}
+          />
+        </div>
 
         {/* Lab Reports */}
         <StatCard
@@ -243,17 +282,19 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
         />
 
         {/* Patient Queries */}
-        <StatCard
-          icon={<MessageCircle size={20} className="text-rose-600" />}
-          title="Patient Queries"
-          value="—"
-          unit="unanswered"
-          accent="bg-gradient-to-r from-rose-400 to-pink-400"
-          accentBg="bg-rose-50"
-          details={[
-            { dot: "bg-rose-500", label: "Check queries tab" },
-          ]}
-        />
+        <div onClick={() => onNavigate?.("queries")} className="cursor-pointer">
+          <StatCard
+            icon={<MessageCircle size={20} className="text-rose-600" />}
+            title="Patient Queries"
+            value={statsLoading ? "—" : pendingQueries.length}
+            unit="unanswered"
+            accent="bg-gradient-to-r from-rose-400 to-pink-400"
+            accentBg="bg-rose-50"
+            details={[
+              { dot: "bg-rose-500", label: "Check queries tab" },
+            ]}
+          />
+        </div>
       </div>
 
       {/* Bottom grid */}
@@ -264,9 +305,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <div>
               <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15 }} className="text-slate-800">
-                Today's Appointments
+                {tabLabel} Appointments
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">04 June 2026 · 12 total</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">{tabLoading ? "…" : `${tabCount} total`}</p>
             </div>
             <button
               onClick={() => onNavigate?.("appointments")}
@@ -275,13 +316,13 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
               See all <ArrowRight size={13} />
             </button>
           </div>
-          {apptsLoading ? (
+          {tabLoading ? (
             <div className="px-5 py-8 text-center text-[13px] text-slate-400">Loading appointments…</div>
           ) : (
           <table className="w-full">
             <thead>
               <tr className="bg-slate-50/60">
-                {["Token", "Patient", "Status", "Action"].map((h) => (
+                {["Token", "Patient", "Date", "Status", "Action"].map((h) => (
                   <th key={h} className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-slate-400 px-5 py-3 border-b border-slate-100">
                     {h}
                   </th>
@@ -289,9 +330,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
               </tr>
             </thead>
             <tbody>
-              {(todayAppts.length === 0) ? (
-                <tr><td colSpan={4} className="px-5 py-8 text-center text-[13px] text-slate-400">No appointments today</td></tr>
-              ) : todayAppts.slice(0, 5).map((apt, idx) => {
+              {(tabAppts.length === 0) ? (
+                <tr><td colSpan={5} className="px-5 py-8 text-center text-[13px] text-slate-400">No appointments for this period</td></tr>
+              ) : tabAppts.slice(0, 8).map((apt, idx) => {
                 const patientName = apt.patients?.name || "Unknown";
                 const patientAge = apt.patients?.age;
                 const statusMap: Record<string, string> = { Confirmed: "waiting", Cancelled: "cancelled" };
@@ -315,6 +356,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
                           {patientAge && <div className="text-[11px] text-slate-400">{patientAge} yrs</div>}
                         </div>
                       </div>
+                    </td>
+                    <td className="px-5 py-3.5 text-[12px] text-slate-400">
+                      {apt.appointment_date ? new Date(apt.appointment_date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—"}
                     </td>
                     <td className="px-5 py-3.5">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${s.cls}`}>

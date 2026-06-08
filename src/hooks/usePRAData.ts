@@ -84,18 +84,23 @@ export function useQueue() {
     fetchData();
   }, [doctorId, fetchData]);
 
+  const callPrev = useCallback(async () => {
+    await api.queue.callPrev(doctorId);
+    fetchData();
+  }, [doctorId, fetchData]);
+
   const setToken = useCallback(async (token: number) => {
     await api.queue.setToken(doctorId, token);
     fetchData();
   }, [doctorId, fetchData]);
 
-  return { data, loading, error, refetch: fetchData, callNext, setToken };
+  return { data, loading, error, refetch: fetchData, callNext, callPrev, setToken };
 }
 
-export function useAppointments(date?: string) {
+export function useAppointments(date?: string, dateFrom?: string, dateTo?: string) {
   const { doctorId } = useAuth();
   return useApiData<Appointment[]>(
-    () => api.appointments.list(doctorId, date),
+    () => api.appointments.list(doctorId, date, dateFrom, dateTo),
     []
   );
 }
