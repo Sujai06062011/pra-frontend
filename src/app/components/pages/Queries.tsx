@@ -1,8 +1,8 @@
-import { MessageCircle, Send, Clock, CheckCircle2, RefreshCw, X, User, Calendar, Pill } from "lucide-react";
-import { useState, useEffect } from "react";
+import { MessageCircle, Send, Clock, CheckCircle2, RefreshCw } from "lucide-react";
+import { useState } from "react";
 import { useQueries } from "../../../hooks/usePRAData";
-import { api, type Query, type Appointment, type Prescription } from "../../../lib/api";
-import { useAuth } from "../../../context/AuthContext";
+import { type Query } from "../../../lib/api";
+import { PatientInfoPanel } from "../shared/PatientInfoPanel";
 
 const avatarColors = [
   "from-emerald-400 to-teal-500", "from-rose-400 to-pink-500", "from-indigo-400 to-violet-500",
@@ -14,199 +14,6 @@ function formatMobile(mobile: string) {
   const m = mobile.replace(/\D/g, "");
   const local = m.slice(-10);
   return `+91 ${local.slice(0, 5)} ${local.slice(5)}`;
-}
-
-// ── Patient history side panel ────────────────────────────
-function PatientPanel({
-  query,
-  allQueries,
-  onClose,
-}: {
-  query: Query;
-  allQueries: Query[];
-  onClose: () => void;
-}) {
-  const { doctorId } = useAuth();
-  const patient = query.patients;
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      api.appointments.list(doctorId, undefined, undefined, undefined, query.patient_id),
-      api.prescriptions.list(doctorId, query.patient_id),
-    ]).then(([appts, rxs]) => {
-      setAppointments(appts.slice(0, 3));
-      setPrescriptions(rxs);
-    }).finally(() => setLoading(false));
-  }, [query.patient_id, doctorId]);
-
-  const otherQueries = allQueries.filter(q => q.patient_id === query.patient_id && q.id !== query.id);
-
-  const timingLabel = (m: { morning?: boolean; afternoon?: boolean; evening?: boolean; night?: boolean }) => {
-    const parts = [];
-    if (m.morning) parts.push("M");
-    if (m.afternoon) parts.push("A");
-    if (m.evening) parts.push("E");
-    if (m.night) parts.push("N");
-    return parts.join("-") || "—";
-  };
-
-  return (
-    <div className="w-80 flex-shrink-0 bg-white border-l border-slate-100 flex flex-col h-full overflow-y-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
-        <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 13 }} className="text-slate-800">
-          Patient Info
-        </span>
-        <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400">
-          <X size={15} />
-        </button>
-      </div>
-
-      <div className="p-5 space-y-5">
-        {/* Patient details */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center text-white font-bold text-sm shadow-sm">
-              {patient?.name?.[0] ?? "?"}
-            </div>
-            <div>
-              <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 14 }} className="text-slate-800">
-                {patient?.name ?? "—"}
-              </div>
-              {patient?.patient_code && (
-                <div className="text-[11px] text-slate-400 font-mono">{patient.patient_code}</div>
-              )}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            {patient?.age && (
-              <div className="bg-slate-50 rounded-lg px-3 py-2">
-                <div className="text-[10px] text-slate-400 uppercase tracking-wide">Age</div>
-                <div className="text-[13px] font-semibold text-slate-700">{patient.age} yrs</div>
-              </div>
-            )}
-            {patient?.gender && (
-              <div className="bg-slate-50 rounded-lg px-3 py-2">
-                <div className="text-[10px] text-slate-400 uppercase tracking-wide">Gender</div>
-                <div className="text-[13px] font-semibold text-slate-700">{patient.gender}</div>
-              </div>
-            )}
-            {patient?.language && (
-              <div className="bg-slate-50 rounded-lg px-3 py-2">
-                <div className="text-[10px] text-slate-400 uppercase tracking-wide">Language</div>
-                <div className="text-[13px] font-semibold text-slate-700">{patient.language}</div>
-              </div>
-            )}
-            {patient?.mobile && (
-              <div className="bg-slate-50 rounded-lg px-3 py-2">
-                <div className="text-[10px] text-slate-400 uppercase tracking-wide">Mobile</div>
-                <a href={`tel:+${patient.mobile}`} className="text-[12px] font-semibold text-blue-600 hover:underline">
-                  {formatMobile(patient.mobile)}
-                </a>
-              </div>
-            )}
-          </div>
-          {patient?.created_at && (
-            <div className="text-[11px] text-slate-400">
-              Registered {new Date(patient.created_at).toLocaleDateString("en-IN", { dateStyle: "medium" })}
-            </div>
-          )}
-        </div>
-
-        {/* Visit history */}
-        <div>
-          <div className="flex items-center gap-1.5 mb-2">
-            <Calendar size={12} className="text-slate-400" />
-            <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 11 }} className="text-slate-500 uppercase tracking-wide">
-              Last Visits
-            </span>
-          </div>
-          {loading ? (
-            <div className="text-[12px] text-slate-400">Loading…</div>
-          ) : appointments.length === 0 ? (
-            <div className="text-[12px] text-slate-400">No visits found</div>
-          ) : (
-            <div className="space-y-1.5">
-              {appointments.map(a => (
-                <div key={a.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
-                  <div>
-                    <div className="text-[12px] font-medium text-slate-700">
-                      {new Date(a.appointment_date).toLocaleDateString("en-IN", { dateStyle: "medium" })}
-                    </div>
-                    {a.appointment_time && (
-                      <div className="text-[10px] text-slate-400">{a.appointment_time.slice(0, 5)}</div>
-                    )}
-                  </div>
-                  {a.token_number && (
-                    <span className="text-[10px] font-semibold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
-                      #{a.token_number}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Active prescriptions */}
-        <div>
-          <div className="flex items-center gap-1.5 mb-2">
-            <Pill size={12} className="text-slate-400" />
-            <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 11 }} className="text-slate-500 uppercase tracking-wide">
-              Active Prescriptions
-            </span>
-          </div>
-          {loading ? (
-            <div className="text-[12px] text-slate-400">Loading…</div>
-          ) : prescriptions.length === 0 ? (
-            <div className="text-[12px] text-slate-400">No prescriptions</div>
-          ) : (
-            <div className="space-y-1.5">
-              {prescriptions.slice(0, 2).map(rx => (
-                <div key={rx.id} className="bg-slate-50 rounded-lg px-3 py-2">
-                  <div className="text-[11px] text-slate-400 mb-1">
-                    {rx.prescription_date ? new Date(rx.prescription_date).toLocaleDateString("en-IN", { dateStyle: "medium" }) : ""}
-                  </div>
-                  {(rx.prescription_medicines ?? []).slice(0, 3).map((m, i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <span className="text-[12px] text-slate-700">{m.medicine_name}</span>
-                      <span className="text-[10px] font-mono text-slate-400">{timingLabel(m)}</span>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Previous queries */}
-        {otherQueries.length > 0 && (
-          <div>
-            <div className="flex items-center gap-1.5 mb-2">
-              <MessageCircle size={12} className="text-slate-400" />
-              <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 11 }} className="text-slate-500 uppercase tracking-wide">
-                Previous Queries
-              </span>
-            </div>
-            <div className="space-y-1.5">
-              {otherQueries.slice(0, 3).map(q => (
-                <div key={q.id} className="bg-slate-50 rounded-lg px-3 py-2">
-                  <p className="text-[11px] text-slate-600 leading-relaxed">{q.question}</p>
-                  {q.reply && (
-                    <p className="text-[11px] text-emerald-600 mt-1 leading-relaxed">↳ {q.reply}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
 }
 
 // ── Main Queries page ─────────────────────────────────────
@@ -374,9 +181,8 @@ export function Queries() {
 
       {/* Fix 2: Patient history panel */}
       {selectedQuery && (
-        <PatientPanel
-          query={selectedQuery}
-          allQueries={queries}
+        <PatientInfoPanel
+          patientId={selectedQuery.patient_id}
           onClose={() => setSelectedQuery(null)}
         />
       )}

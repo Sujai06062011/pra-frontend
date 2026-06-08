@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Search, Filter, ChevronDown, Phone, Calendar, FileText, User, RefreshCw } from "lucide-react";
 import { usePatients } from "../../../hooks/usePRAData";
+import { PatientInfoPanel } from "../shared/PatientInfoPanel";
 
 const avatarColors = [
   "from-violet-400 to-purple-500", "from-pink-400 to-rose-500", "from-sky-400 to-blue-500",
@@ -12,6 +13,7 @@ const avatarColors = [
 export function Patients() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
@@ -22,7 +24,8 @@ export function Patients() {
   const { data: patients, loading, error, refetch } = usePatients(debouncedSearch || undefined);
 
   return (
-    <div className="p-7 space-y-5">
+    <div className="flex h-full">
+    <div className="flex-1 p-7 space-y-5 overflow-y-auto">
       {error && (
         <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
           <span className="text-[13px] text-rose-700 flex-1">Failed to load patients.</span>
@@ -68,7 +71,7 @@ export function Patients() {
         {patients.map((p, idx) => {
           const color = avatarColors[idx % avatarColors.length];
           return (
-          <div key={p.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer group">
+          <div key={p.id} onClick={() => setSelectedPatientId(selectedPatientId === p.id ? null : p.id)} className={`bg-white rounded-2xl border shadow-sm p-4 hover:shadow-md transition-all cursor-pointer group ${selectedPatientId === p.id ? "border-indigo-300 ring-2 ring-indigo-100" : "border-slate-100"}`}>
             <div className="flex items-start gap-3 mb-3">
               <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center text-white text-lg font-bold shadow-sm flex-shrink-0`}>
                 {p.name[0]}
@@ -117,6 +120,14 @@ export function Patients() {
           );
         })}
       </div>
+      )}
+    </div>
+
+      {selectedPatientId && (
+        <PatientInfoPanel
+          patientId={selectedPatientId}
+          onClose={() => setSelectedPatientId(null)}
+        />
       )}
     </div>
   );

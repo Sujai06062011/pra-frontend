@@ -112,6 +112,21 @@ export interface Doctor {
   mobile?: string;
 }
 
+export interface Visit {
+  id: string;
+  patient_id: string;
+  doctor_id?: string;
+  appointment_id?: string;
+  visit_date?: string;
+  chief_complaint?: string;
+  symptoms?: string;
+  diagnosis?: string;
+  notes?: string;
+  visit_status?: string;
+  created_at: string;
+  appointments?: { appointment_date: string; token_number: number };
+}
+
 export interface Query {
   id: string;
   doctor_id: string;
@@ -220,8 +235,11 @@ export const api = {
   },
 
   queries: {
-    list: (doctorId: string) =>
-      req<Query[]>(`/queries?doctor_id=${doctorId}`),
+    list: (doctorId: string, patientId?: string) => {
+      const params = new URLSearchParams({ doctor_id: doctorId });
+      if (patientId) params.set("patient_id", patientId);
+      return req<Query[]>(`/queries?${params}`);
+    },
     pending: (doctorId: string) =>
       req<Query[]>(`/queries/pending?doctor_id=${doctorId}`),
     answer: (id: string, answer: string) =>
@@ -229,6 +247,11 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify({ answer }),
       }),
+  },
+
+  visits: {
+    getByPatient: (patientId: string) =>
+      req<Visit[]>(`/patients/${patientId}/visits`),
   },
 
   reviews: {
