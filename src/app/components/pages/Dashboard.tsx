@@ -335,14 +335,19 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
               ) : tabAppts.slice(0, 8).map((apt, idx) => {
                 const patientName = apt.patients?.name || "Unknown";
                 const patientAge = apt.patients?.age;
-                const statusMap: Record<string, string> = { Confirmed: "waiting", Cancelled: "cancelled" };
-                const mappedStatus = statusMap[apt.status] || "waiting";
+                const currentToken = stats.current_token ?? 0;
+                const t = apt.token_number ?? 0;
+                const mappedStatus: string =
+                  apt.status === "Cancelled" ? "cancelled" :
+                  t <= currentToken           ? "done" :
+                  t === currentToken + 1      ? "in-progress" :
+                                                "waiting";
                 const s = statusConfig[mappedStatus as keyof typeof statusConfig];
                 const color = avatarColors[idx % avatarColors.length];
                 return (
                   <tr key={apt.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors cursor-pointer group">
                     <td className="px-5 py-3.5">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold bg-slate-100 text-slate-600`}>
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold ${mappedStatus === "in-progress" ? "bg-emerald-500 text-white shadow-sm" : "bg-slate-100 text-slate-600"}`}>
                         {apt.token_number ?? "—"}
                       </div>
                     </td>
