@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRA — Dr. Kumar Clinic Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0f1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --surface3: #1f2d42;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #f0f4ff;
+    --text2: #8899bb;
+    --text3: #4a5a78;
+    --teal: #00d4aa;
+    --teal2: #00a882;
+    --teal-glow: rgba(0,212,170,0.15);
+    --teal-glow2: rgba(0,212,170,0.08);
+    --amber: #f59e0b;
+    --amber-glow: rgba(245,158,11,0.12);
+    --red: #f43f5e;
+    --red-glow: rgba(244,63,94,0.12);
+    --blue: #3b82f6;
+    --blue-glow: rgba(59,130,246,0.12);
+    --purple: #a78bfa;
+    --purple-glow: rgba(167,139,250,0.12);
+    --green: #10b981;
+    --green-glow: rgba(16,185,129,0.12);
+    --sidebar-w: 240px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    overflow-x: hidden;
+  }
+
+  /* ── SIDEBAR ─────────────────────────────── */
+  .sidebar {
+    width: var(--sidebar-w);
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    padding: 24px 20px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo-mark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--teal), #00a882);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    box-shadow: 0 0 20px var(--teal-glow);
+  }
+
+  .logo-text {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 18px;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 2px;
+    font-weight: 400;
+  }
+
+  .clinic-badge {
+    margin: 16px 20px 0;
+    padding: 10px 12px;
+    background: var(--teal-glow2);
+    border: 1px solid rgba(0,212,170,0.2);
+    border-radius: 10px;
+  }
+
+  .clinic-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--teal);
+  }
+
+  .clinic-doctor {
+    font-size: 11px;
+    color: var(--text2);
+    margin-top: 2px;
+  }
+
+  .nav {
+    padding: 20px 12px;
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .nav-section {
+    margin-bottom: 24px;
+  }
+
+  .nav-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text3);
+    padding: 0 8px;
+    margin-bottom: 6px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--text2);
+    font-size: 13.5px;
+    font-weight: 500;
+    position: relative;
+    margin-bottom: 1px;
+  }
+
+  .nav-item:hover {
+    background: var(--surface2);
+    color: var(--text);
+  }
+
+  .nav-item.active {
+    background: var(--teal-glow);
+    color: var(--teal);
+    border: 1px solid rgba(0,212,170,0.2);
+  }
+
+  .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+
+  .nav-badge {
+    margin-left: auto;
+    background: var(--red);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 20px;
+    min-width: 18px;
+    text-align: center;
+  }
+
+  .nav-badge.amber { background: var(--amber); }
+  .nav-badge.teal { background: var(--teal); color: #000; }
+
+  .sidebar-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .user-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .user-avatar {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+    color: white;
+  }
+
+  .user-info { flex: 1; }
+  .user-name { font-size: 12px; font-weight: 600; color: var(--text); }
+  .user-role { font-size: 11px; color: var(--text3); }
+
+  /* ── MAIN ─────────────────────────────────── */
+  .main {
+    margin-left: var(--sidebar-w);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  /* ── TOPBAR ───────────────────────────────── */
+  .topbar {
+    height: 64px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 28px;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+
+  .page-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 17px;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .topbar-date {
+    font-size: 12px;
+    color: var(--text2);
+    background: var(--surface2);
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+
+  .live-dot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--teal);
+    font-weight: 500;
+  }
+
+  .dot {
+    width: 7px; height: 7px;
+    background: var(--teal);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--teal);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.85); }
+  }
+
+  .topbar-btn {
+    background: var(--teal);
+    color: #000;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    letter-spacing: 0.3px;
+  }
+
+  /* ── CONTENT ──────────────────────────────── */
+  .content {
+    padding: 24px 28px;
+    flex: 1;
+  }
+
+  /* ── STAT CARDS ───────────────────────────── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+    cursor: pointer;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--border2);
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.teal::before { background: linear-gradient(90deg, var(--teal), transparent); }
+  .stat-card.amber::before { background: linear-gradient(90deg, var(--amber), transparent); }
+  .stat-card.red::before { background: linear-gradient(90deg, var(--red), transparent); }
+  .stat-card.blue::before { background: linear-gradient(90deg, var(--blue), transparent); }
+  .stat-card.purple::before { background: linear-gradient(90deg, var(--purple), transparent); }
+  .stat-card.green::before { background: linear-gradient(90deg, var(--green), transparent); }
+
+  .card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .card-icon {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+
+  .card-icon.teal { background: var(--teal-glow); }
+  .card-icon.amber { background: var(--amber-glow); }
+  .card-icon.red { background: var(--red-glow); }
+  .card-icon.blue { background: var(--blue-glow); }
+  .card-icon.purple { background: var(--purple-glow); }
+  .card-icon.green { background: var(--green-glow); }
+
+  .card-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text3);
+    margin-top: 4px;
+  }
+
+  .card-menu {
+    color: var(--text3);
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  .card-main {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .card-value {
+    font-family: 'Syne', sans-serif;
+    font-size: 32px;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--text);
+  }
+
+  .card-unit {
+    font-size: 12px;
+    color: var(--text2);
+    margin-bottom: 4px;
+  }
+
+  .card-details {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .detail-pill {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11.5px;
+    color: var(--text2);
+  }
+
+  .detail-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+  }
+
+  .detail-dot.green { background: var(--green); }
+  .detail-dot.red { background: var(--red); }
+  .detail-dot.amber { background: var(--amber); }
+  .detail-dot.teal { background: var(--teal); }
+  .detail-dot.blue { background: var(--blue); }
+  .detail-dot.purple { background: var(--purple); }
+
+  /* ── QUEUE CARD SPECIAL ───────────────────── */
+  .queue-display {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 12px;
+  }
+
+  .queue-token {
+    text-align: center;
+  }
+
+  .token-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text3);
+    margin-bottom: 4px;
+  }
+
+  .token-num {
+    font-family: 'Syne', sans-serif;
+    font-size: 42px;
+    font-weight: 800;
+    color: var(--teal);
+    line-height: 1;
+    text-shadow: 0 0 30px var(--teal-glow);
+  }
+
+  .queue-divider {
+    width: 1px;
+    height: 50px;
+    background: var(--border);
+  }
+
+  .queue-stats { flex: 1; }
+
+  .queue-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .qs-label { font-size: 11px; color: var(--text2); }
+  .qs-val { font-size: 13px; font-weight: 600; color: var(--text); }
+
+  .queue-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .btn-next {
+    flex: 1;
+    background: var(--teal);
+    color: #000;
+    border: none;
+    padding: 8px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .btn-prev {
+    background: var(--surface2);
+    color: var(--text2);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  /* ── BOTTOM GRID ──────────────────────────── */
+  .bottom-grid {
+    display: grid;
+    grid-template-columns: 1.8fr 1fr;
+    gap: 16px;
+  }
+
+  /* ── TABLE CARD ───────────────────────────── */
+  .table-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .card-head {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .card-head-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .card-head-sub {
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 2px;
+  }
+
+  .see-all {
+    font-size: 12px;
+    color: var(--teal);
+    cursor: pointer;
+    font-weight: 500;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead th {
+    padding: 10px 20px;
+    text-align: left;
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text3);
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+    cursor: pointer;
+  }
+
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+
+  tbody td {
+    padding: 12px 20px;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .token-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px; height: 28px;
+    background: var(--teal-glow);
+    border: 1px solid rgba(0,212,170,0.3);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--teal);
+    font-family: 'Syne', sans-serif;
+  }
+
+  .patient-cell { display: flex; align-items: center; gap: 10px; }
+
+  .patient-avatar {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+  }
+
+  .patient-name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .patient-age { font-size: 11px; color: var(--text3); }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .status-badge.waiting {
+    background: var(--amber-glow);
+    color: var(--amber);
+    border: 1px solid rgba(245,158,11,0.2);
+  }
+
+  .status-badge.in-progress {
+    background: var(--teal-glow);
+    color: var(--teal);
+    border: 1px solid rgba(0,212,170,0.2);
+  }
+
+  .status-badge.done {
+    background: var(--green-glow);
+    color: var(--green);
+    border: 1px solid rgba(16,185,129,0.2);
+  }
+
+  .status-badge.cancelled {
+    background: var(--red-glow);
+    color: var(--red);
+    border: 1px solid rgba(244,63,94,0.2);
+  }
+
+  .action-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text2);
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.15s;
+  }
+
+  .action-btn:hover {
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+
+  /* ── SIDE PANELS ──────────────────────────── */
+  .side-panels { display: flex; flex-direction: column; gap: 16px; }
+
+  .panel-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .panel-head {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .panel-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .panel-count {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  .panel-count.red { background: var(--red-glow); color: var(--red); }
+  .panel-count.amber { background: var(--amber-glow); color: var(--amber); }
+
+  .panel-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .panel-item:last-child { border-bottom: none; }
+  .panel-item:hover { background: var(--surface2); }
+
+  .panel-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .panel-content { flex: 1; }
+  .panel-item-name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .panel-item-sub { font-size: 11px; color: var(--text3); margin-top: 1px; }
+
+  .panel-action {
+    font-size: 11px;
+    color: var(--teal);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* ── ALERT BAR ────────────────────────────── */
+  .alert-bar {
+    background: linear-gradient(135deg, rgba(245,158,11,0.1), rgba(244,63,94,0.05));
+    border: 1px solid rgba(245,158,11,0.25);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .alert-icon { font-size: 18px; }
+
+  .alert-text { flex: 1; font-size: 13px; color: var(--text); }
+  .alert-text strong { color: var(--amber); }
+
+  .alert-close {
+    color: var(--text3);
+    cursor: pointer;
+    font-size: 16px;
+  }
+
+  /* ── WEEK CHART ───────────────────────────── */
+  .week-chart {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .chart-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    height: 80px;
+  }
+
+  .chart-bar-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    height: 100%;
+    justify-content: flex-end;
+  }
+
+  .chart-bar {
+    width: 100%;
+    border-radius: 4px 4px 0 0;
+    transition: opacity 0.2s;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .chart-bar:hover { opacity: 0.8; }
+
+  .chart-label {
+    font-size: 10px;
+    color: var(--text3);
+    font-weight: 500;
+  }
+
+  .chart-val {
+    font-size: 10px;
+    color: var(--text2);
+    font-weight: 600;
+  }
+
+  /* Tab styles */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: var(--surface2);
+    border-radius: 8px;
+    margin-bottom: 20px;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 7px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    color: var(--text3);
+    transition: all 0.15s;
+  }
+
+  .tab.active {
+    background: var(--surface);
+    color: var(--teal);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-mark">
+      <div class="logo-icon">🏥</div>
+      <div>
+        <div class="logo-text">PRA</div>
+        <div class="logo-sub">Patient Relationship Assistant</div>
+      </div>
+    </div>
+    <div class="clinic-badge">
+      <div class="clinic-name">Dr. Kumar Child Care</div>
+      <div class="clinic-doctor">Dr. Rajkumar · Paediatrics</div>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <div class="nav-section">
+      <div class="nav-label">Main</div>
+      <div class="nav-item active">
+        <span class="nav-icon">📊</span> Overview
+      </div>
+      <div class="nav-item">
+        <span class="nav-icon">📅</span> Appointments
+        <span class="nav-badge teal">12</span>
+      </div>
+      <div class="nav-item">
+        <span class="nav-icon">🔢</span> Queue
+      </div>
+      <div class="nav-item">
+        <span class="nav-icon">👥</span> Patients
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Clinical</div>
+      <div class="nav-item">
+        <span class="nav-icon">💊</span> Prescriptions
+      </div>
+      <div class="nav-item">
+        <span class="nav-icon">🔬</span> Lab Reports
+        <span class="nav-badge">7</span>
+      </div>
+      <div class="nav-item">
+        <span class="nav-icon">💬</span> Queries
+        <span class="nav-badge">5</span>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Outreach</div>
+      <div class="nav-item">
+        <span class="nav-icon">📞</span> Follow-ups
+        <span class="nav-badge amber">3</span>
+      </div>
+      <div class="nav-item">
+        <span class="nav-icon">⭐</span> Reviews
+      </div>
+      <div class="nav-item">
+        <span class="nav-icon">📈</span> Analytics
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Settings</div>
+      <div class="nav-item">
+        <span class="nav-icon">⚙️</span> Clinic Settings
+      </div>
+    </div>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="user-card">
+      <div class="user-avatar">RK</div>
+      <div class="user-info">
+        <div class="user-name">Dr. Rajkumar</div>
+        <div class="user-role">Admin · Reception</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="page-title">Overview</div>
+    <div class="topbar-date">📅 Thursday, 04 June 2026</div>
+    <div class="live-dot">
+      <div class="dot"></div>
+      Live
+    </div>
+    <button class="topbar-btn">+ New Appointment</button>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- ALERT BAR -->
+    <div class="alert-bar">
+      <div class="alert-icon">⚠️</div>
+      <div class="alert-text">
+        <strong>3 patients</strong> have not responded to follow-up calls · 
+        <strong>2 prescriptions</strong> ending today · 
+        <strong>5 queries</strong> awaiting doctor reply
+      </div>
+      <div class="alert-close">✕</div>
+    </div>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <div class="tab active">Today</div>
+      <div class="tab">This Week</div>
+      <div class="tab">This Month</div>
+    </div>
+
+    <!-- STAT CARDS -->
+    <div class="stats-grid">
+
+      <!-- Appointments -->
+      <div class="stat-card teal">
+        <div class="card-header">
+          <div class="card-icon teal">📅</div>
+          <div class="card-menu">···</div>
+        </div>
+        <div class="card-title">Today's Appointments</div>
+        <div class="card-main">
+          <div class="card-value">12</div>
+          <div class="card-unit">total</div>
+        </div>
+        <div class="card-details">
+          <div class="detail-pill">
+            <div class="detail-dot green"></div>
+            10 Confirmed
+          </div>
+          <div class="detail-pill">
+            <div class="detail-dot red"></div>
+            2 Cancelled
+          </div>
+        </div>
+      </div>
+
+      <!-- Queue -->
+      <div class="stat-card teal" style="grid-row: span 1;">
+        <div class="card-header">
+          <div class="card-icon teal">🔢</div>
+          <div class="card-menu">···</div>
+        </div>
+        <div class="card-title">Live Queue</div>
+        <div class="queue-display">
+          <div class="queue-token">
+            <div class="token-label">Now Serving</div>
+            <div class="token-num">5</div>
+          </div>
+          <div class="queue-divider"></div>
+          <div class="queue-stats">
+            <div class="queue-stat">
+              <span class="qs-label">Waiting</span>
+              <span class="qs-val">7 patients</span>
+            </div>
+            <div class="queue-stat">
+              <span class="qs-label">Avg Wait</span>
+              <span class="qs-val">~35 mins</span>
+            </div>
+            <div class="queue-stat">
+              <span class="qs-label">Total Today</span>
+              <span class="qs-val">12 tokens</span>
+            </div>
+          </div>
+        </div>
+        <div class="queue-actions">
+          <button class="btn-prev">◀ Prev</button>
+          <button class="btn-next">Next Token ▶</button>
+        </div>
+      </div>
+
+      <!-- Medicine Alerts -->
+      <div class="stat-card amber">
+        <div class="card-header">
+          <div class="card-icon amber">💊</div>
+          <div class="card-menu">···</div>
+        </div>
+        <div class="card-title">Medicine Alerts</div>
+        <div class="card-main">
+          <div class="card-value">5</div>
+          <div class="card-unit">active</div>
+        </div>
+        <div class="card-details">
+          <div class="detail-pill">
+            <div class="detail-dot red"></div>
+            2 Ending Today
+          </div>
+          <div class="detail-pill">
+            <div class="detail-dot amber"></div>
+            3 Tomorrow
+          </div>
+        </div>
+      </div>
+
+      <!-- Post-Visit Follow-ups -->
+      <div class="stat-card purple">
+        <div class="card-header">
+          <div class="card-icon purple">📞</div>
+          <div class="card-menu">···</div>
+        </div>
+        <div class="card-title">Post-Visit Follow-ups</div>
+        <div class="card-main">
+          <div class="card-value">8</div>
+          <div class="card-unit">pending</div>
+        </div>
+        <div class="card-details">
+          <div class="detail-pill">
+            <div class="detail-dot red"></div>
+            3 No Response
+          </div>
+          <div class="detail-pill">
+            <div class="detail-dot amber"></div>
+            2 Needs Appt
+          </div>
+          <div class="detail-pill">
+            <div class="detail-dot green"></div>
+            15 Resolved
+          </div>
+        </div>
+      </div>
+
+      <!-- Lab Reports -->
+      <div class="stat-card blue">
+        <div class="card-header">
+          <div class="card-icon blue">🔬</div>
+          <div class="card-menu">···</div>
+        </div>
+        <div class="card-title">Lab Reports</div>
+        <div class="card-main">
+          <div class="card-value">7</div>
+          <div class="card-unit">pending review</div>
+        </div>
+        <div class="card-details">
+          <div class="detail-pill">
+            <div class="detail-dot blue"></div>
+            3 New Today
+          </div>
+          <div class="detail-pill">
+            <div class="detail-dot green"></div>
+            24 Reviewed
+          </div>
+        </div>
+      </div>
+
+      <!-- Patient Queries -->
+      <div class="stat-card red">
+        <div class="card-header">
+          <div class="card-icon red">💬</div>
+          <div class="card-menu">···</div>
+        </div>
+        <div class="card-title">Patient Queries</div>
+        <div class="card-main">
+          <div class="card-value">5</div>
+          <div class="card-unit">unanswered</div>
+        </div>
+        <div class="card-details">
+          <div class="detail-pill">
+            <div class="detail-dot red"></div>
+            2 New Today
+          </div>
+          <div class="detail-pill">
+            <div class="detail-dot green"></div>
+            12 Answered
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- BOTTOM GRID -->
+    <div class="bottom-grid">
+
+      <!-- Appointments Table -->
+      <div class="table-card">
+        <div class="card-head">
+          <div>
+            <div class="card-head-title">Today's Appointments</div>
+            <div class="card-head-sub">04 June 2026 · 12 total</div>
+          </div>
+          <div class="see-all">See all →</div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Token</th>
+              <th>Patient</th>
+              <th>Time</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div class="token-badge">3</div></td>
+              <td>
+                <div class="patient-cell">
+                  <div class="patient-avatar" style="background: linear-gradient(135deg,#667eea,#764ba2)">S</div>
+                  <div>
+                    <div class="patient-name">Sujaikumar</div>
+                    <div class="patient-age">43 yrs · Male</div>
+                  </div>
+                </div>
+              </td>
+              <td style="color:var(--text2); font-size:12px;">9:30 AM</td>
+              <td><span class="status-badge done">✓ Done</span></td>
+              <td><button class="action-btn">View</button></td>
+            </tr>
+            <tr>
+              <td><div class="token-badge">4</div></td>
+              <td>
+                <div class="patient-cell">
+                  <div class="patient-avatar" style="background: linear-gradient(135deg,#f093fb,#f5576c)">P</div>
+                  <div>
+                    <div class="patient-name">Poornima</div>
+                    <div class="patient-age">43 yrs · Female</div>
+                  </div>
+                </div>
+              </td>
+              <td style="color:var(--text2); font-size:12px;">9:45 AM</td>
+              <td><span class="status-badge done">✓ Done</span></td>
+              <td><button class="action-btn">View</button></td>
+            </tr>
+            <tr>
+              <td><div class="token-badge" style="color:var(--teal);border-color:var(--teal);background:var(--teal-glow)">5</div></td>
+              <td>
+                <div class="patient-cell">
+                  <div class="patient-avatar" style="background: linear-gradient(135deg,#4facfe,#00f2fe)">R</div>
+                  <div>
+                    <div class="patient-name">Rajesh Kumar</div>
+                    <div class="patient-age">35 yrs · Male</div>
+                  </div>
+                </div>
+              </td>
+              <td style="color:var(--text2); font-size:12px;">10:00 AM</td>
+              <td><span class="status-badge in-progress">● In Progress</span></td>
+              <td><button class="action-btn" style="border-color:var(--teal);color:var(--teal)">Prescribe</button></td>
+            </tr>
+            <tr>
+              <td><div class="token-badge">6</div></td>
+              <td>
+                <div class="patient-cell">
+                  <div class="patient-avatar" style="background: linear-gradient(135deg,#43e97b,#38f9d7)">A</div>
+                  <div>
+                    <div class="patient-name">Ananya Devi</div>
+                    <div class="patient-age">28 yrs · Female</div>
+                  </div>
+                </div>
+              </td>
+              <td style="color:var(--text2); font-size:12px;">10:15 AM</td>
+              <td><span class="status-badge waiting">⏳ Waiting</span></td>
+              <td><button class="action-btn">View</button></td>
+            </tr>
+            <tr>
+              <td><div class="token-badge">7</div></td>
+              <td>
+                <div class="patient-cell">
+                  <div class="patient-avatar" style="background: linear-gradient(135deg,#fa709a,#fee140)">M</div>
+                  <div>
+                    <div class="patient-name">Mohammed Ali</div>
+                    <div class="patient-age">52 yrs · Male</div>
+                  </div>
+                </div>
+              </td>
+              <td style="color:var(--text2); font-size:12px;">10:30 AM</td>
+              <td><span class="status-badge waiting">⏳ Waiting</span></td>
+              <td><button class="action-btn">View</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Side Panels -->
+      <div class="side-panels">
+
+        <!-- Urgent: No Response Follow-ups -->
+        <div class="panel-card">
+          <div class="panel-head">
+            <div class="panel-title">🚨 Needs Attention</div>
+            <div class="panel-count red">3</div>
+          </div>
+          <div class="panel-item">
+            <div class="panel-dot" style="background:var(--red)"></div>
+            <div class="panel-content">
+              <div class="panel-item-name">Kavitha S.</div>
+              <div class="panel-item-sub">No response · 3 days · Call again</div>
+            </div>
+            <div class="panel-action">📞 Call</div>
+          </div>
+          <div class="panel-item">
+            <div class="panel-dot" style="background:var(--amber)"></div>
+            <div class="panel-content">
+              <div class="panel-item-name">Dinesh R.</div>
+              <div class="panel-item-sub">Wants appointment · Book now</div>
+            </div>
+            <div class="panel-action">📅 Book</div>
+          </div>
+          <div class="panel-item">
+            <div class="panel-dot" style="background:var(--red)"></div>
+            <div class="panel-content">
+              <div class="panel-item-name">Meena T.</div>
+              <div class="panel-item-sub">No response · 2 days · Call again</div>
+            </div>
+            <div class="panel-action">📞 Call</div>
+          </div>
+        </div>
+
+        <!-- Week Chart -->
+        <div class="panel-card">
+          <div class="panel-head">
+            <div class="panel-title">📈 This Week</div>
+            <div style="font-size:11px;color:var(--text3)">Appointments</div>
+          </div>
+          <div class="week-chart">
+            <div class="chart-bars">
+              <div class="chart-bar-wrap">
+                <div class="chart-val">8</div>
+                <div class="chart-bar" style="height:55%;background:var(--surface3)"></div>
+                <div class="chart-label">Mon</div>
+              </div>
+              <div class="chart-bar-wrap">
+                <div class="chart-val">11</div>
+                <div class="chart-bar" style="height:75%;background:var(--surface3)"></div>
+                <div class="chart-label">Tue</div>
+              </div>
+              <div class="chart-bar-wrap">
+                <div class="chart-val">9</div>
+                <div class="chart-bar" style="height:60%;background:var(--surface3)"></div>
+                <div class="chart-label">Wed</div>
+              </div>
+              <div class="chart-bar-wrap">
+                <div class="chart-val">12</div>
+                <div class="chart-bar" style="height:100%;background:linear-gradient(180deg,var(--teal),var(--teal2))"></div>
+                <div class="chart-label" style="color:var(--teal)">Thu</div>
+              </div>
+              <div class="chart-bar-wrap">
+                <div class="chart-val">—</div>
+                <div class="chart-bar" style="height:10%;background:var(--surface3);opacity:0.3"></div>
+                <div class="chart-label">Fri</div>
+              </div>
+              <div class="chart-bar-wrap">
+                <div class="chart-val">—</div>
+                <div class="chart-bar" style="height:10%;background:var(--surface3);opacity:0.3"></div>
+                <div class="chart-label">Sat</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</main>
+
+</body>
+</html>
