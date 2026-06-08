@@ -13,8 +13,8 @@ export function Queries() {
   const [replyMap, setReplyMap] = useState<Record<string, string>>({});
   const [sending, setSending] = useState<Record<string, boolean>>({});
 
-  const unanswered = queries.filter(q => q.status === "pending");
-  const answered = queries.filter(q => q.status === "answered");
+  const unanswered = queries.filter(q => q.status?.toLowerCase() === "pending");
+  const answered = queries.filter(q => q.status?.toLowerCase() !== "pending");
 
   const handleSend = async (id: string) => {
     const text = replyMap[id];
