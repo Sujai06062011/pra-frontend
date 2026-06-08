@@ -74,7 +74,7 @@ export default function App() {
   const [showModal, setShowModal] = useState(false);
   const { data: queries } = useQueries();
   const { data: followUps } = useFollowUps();
-  const queriesBadge = queries.filter(q => q.status?.toLowerCase() === "pending").length;
+  const queriesBadge = queries.filter(q => q.status === "Pending").length;
   const followupsBadge = followUps.filter(f => !f.completed_at).length;
 
   const renderPage = () => {

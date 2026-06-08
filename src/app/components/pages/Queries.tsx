@@ -13,8 +13,8 @@ export function Queries() {
   const [replyMap, setReplyMap] = useState<Record<string, string>>({});
   const [sending, setSending] = useState<Record<string, boolean>>({});
 
-  const unanswered = queries.filter(q => q.status?.toLowerCase() === "pending");
-  const answered = queries.filter(q => q.status?.toLowerCase() !== "pending");
+  const unanswered = queries.filter(q => q.status === "Pending");
+  const answered = queries.filter(q => q.status === "Closed");
 
   const handleSend = async (id: string) => {
     const text = replyMap[id];
@@ -135,10 +135,10 @@ export function Queries() {
                 <p className="text-[12px] text-slate-500 mt-1">{q.question}</p>
               </div>
             </div>
-            {q.answer && (
+            {q.reply && (
             <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-2.5 flex items-start gap-2">
               <CheckCircle2 size={12} className="text-emerald-600 mt-0.5 flex-shrink-0" />
-              <p className="text-[12px] text-emerald-700">{q.answer}</p>
+              <p className="text-[12px] text-emerald-700">{q.reply}</p>
             </div>
             )}
           </div>

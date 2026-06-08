@@ -18,8 +18,9 @@ export interface Appointment {
   doctor_id: string;
   patient_id: string;
   appointment_date: string;
+  appointment_time?: string;
   token_number?: number;
-  status: "scheduled" | "completed" | "cancelled" | "no_show";
+  status: "Confirmed" | "Cancelled";
   patients?: Patient;
   created_at: string;
 }
@@ -31,21 +32,28 @@ export interface Token {
 }
 
 export interface Medicine {
-  name: string;
+  id?: string;
+  medicine_name: string;
   dosage: string;
-  frequency: string;
-  duration: string;
+  morning: boolean;
+  afternoon: boolean;
+  evening: boolean;
+  night: boolean;
+  before_food?: boolean;
+  duration_days?: number;
+  instructions?: string;
 }
 
 export interface Prescription {
   id: string;
   doctor_id: string;
   patient_id: string;
-  diagnosis?: string;
-  medicines?: Medicine[];
-  is_active: boolean;
-  start_date?: string;
-  end_date?: string;
+  visit_id?: string;
+  prescription_date?: string;
+  general_notes?: string;
+  precautions?: string;
+  dietary_instructions?: string;
+  prescription_medicines?: Medicine[];
   created_at: string;
   patients?: Pick<Patient, "name" | "mobile" | "patient_code">;
 }
@@ -54,7 +62,11 @@ export interface FollowUp {
   id: string;
   doctor_id: string;
   patient_id: string;
-  status: "pending" | "completed" | "no_response";
+  visit_id?: string;
+  scheduled_date?: string;
+  channel?: string;
+  call_status?: "Pending" | "Completed";
+  response_notes?: string;
   created_at: string;
   completed_at?: string | null;
   patients?: Pick<Patient, "name" | "mobile" | "language">;
@@ -64,7 +76,10 @@ export interface Review {
   id: string;
   doctor_id: string;
   patient_id: string;
-  review_sent_at: string;
+  visit_id?: string;
+  rating?: number;
+  feedback?: string;
+  created_at: string;
   patients?: Pick<Patient, "name" | "mobile">;
 }
 
@@ -102,9 +117,11 @@ export interface Query {
   doctor_id: string;
   patient_id: string;
   question: string;
-  answer?: string;
-  status: "pending" | "answered";
-  answered_at?: string;
+  reply?: string;
+  replied_at?: string;
+  replied_by?: string;
+  status: "Pending" | "Closed";
+  priority?: string;
   created_at: string;
   patients?: Pick<Patient, "name" | "mobile">;
 }

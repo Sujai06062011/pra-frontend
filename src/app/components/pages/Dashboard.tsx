@@ -94,7 +94,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
   const { data: queries } = useQueries();
   const { data: followUps } = useFollowUps();
 
-  const pendingQueries = queries.filter(q => q.status?.toLowerCase() === "pending");
+  const pendingQueries = queries.filter(q => q.status === "Pending");
   const pendingFollowUps = followUps.filter(f => !f.completed_at);
   const attentionTotal = pendingQueries.length + pendingFollowUps.length;
 
@@ -294,7 +294,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
               ) : todayAppts.slice(0, 5).map((apt, idx) => {
                 const patientName = apt.patients?.name || "Unknown";
                 const patientAge = apt.patients?.age;
-                const statusMap = { scheduled: "waiting", completed: "done", cancelled: "cancelled", no_show: "cancelled" } as const;
+                const statusMap: Record<string, string> = { Confirmed: "waiting", Cancelled: "cancelled" };
                 const mappedStatus = statusMap[apt.status] || "waiting";
                 const s = statusConfig[mappedStatus as keyof typeof statusConfig];
                 const color = avatarColors[idx % avatarColors.length];

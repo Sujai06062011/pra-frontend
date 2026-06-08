@@ -194,7 +194,7 @@ export function useQueries() {
     fetchData();
   }, [fetchData]);
 
-  const unreadCount = data.filter((q) => q.status === "pending").length;
+  const unreadCount = data.filter((q) => q.status === "Pending").length;
 
   return { data, loading, error, refetch: fetchData, answer, unreadCount };
 }

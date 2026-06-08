@@ -87,7 +87,7 @@ export function Queue() {
         <div className="divide-y divide-slate-50">
           {data.appointments.map((p, idx) => {
             const isCurrent = p.token_number === current;
-            const isDone = p.status === "completed";
+            const isDone = p.status === "Cancelled" || (p.token_number !== undefined && p.token_number < current);
             const color = avatarColors[idx % avatarColors.length];
             const name = p.patients?.name || "Unknown";
             return (
@@ -114,17 +114,22 @@ export function Queue() {
                   {p.patients?.age && <div className="text-[11px] text-slate-400">{p.patients.age} yrs</div>}
                 </div>
                 <div>
-                  {isDone && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      <CheckCircle2 size={11} /> Done
+                  {p.status === "Cancelled" && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-rose-50 text-rose-600 border border-rose-200">
+                      Cancelled
                     </span>
                   )}
-                  {!isDone && isCurrent && (
+                  {p.status === "Confirmed" && isDone && !isCurrent && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <CheckCircle2 size={11} /> Seen
+                    </span>
+                  )}
+                  {p.status === "Confirmed" && isCurrent && (
                     <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                       <Activity size={11} /> In Progress
                     </span>
                   )}
-                  {!isDone && !isCurrent && (
+                  {p.status === "Confirmed" && !isDone && !isCurrent && (
                     <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
                       <Clock size={11} /> Waiting
                     </span>

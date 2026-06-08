@@ -18,8 +18,8 @@ export function FollowUps() {
   const { data: followUps, loading, error, refetch, triggerWhatsapp, triggerCalls } = useFollowUps();
   const [triggering, setTriggering] = useState<string | null>(null);
 
-  const pending = followUps.filter(f => f.status === "pending" || f.status === "no_response");
-  const completed = followUps.filter(f => f.status === "completed");
+  const pending = followUps.filter(f => !f.completed_at);
+  const completed = followUps.filter(f => !!f.completed_at);
 
   const handleTrigger = async (type: "whatsapp" | "calls") => {
     setTriggering(type);
@@ -91,7 +91,7 @@ export function FollowUps() {
           {pending.map((f, idx) => {
             const name = f.patients?.name || "Unknown";
             const phone = f.patients?.mobile || "";
-            const sc = statusConfig[f.status] || statusConfig["pending"];
+            const sc = statusConfig[f.call_status?.toLowerCase() ?? "pending"] || statusConfig["pending"];
             const color = avatarColors[idx % avatarColors.length];
             return (
               <div key={f.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-4 hover:shadow-md transition-shadow">
@@ -142,10 +142,13 @@ export function FollowUps() {
                 <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center text-white font-bold flex-shrink-0`}>
                   {name[0]}
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <span className="text-[13px] font-medium text-slate-600">{name}</span>
+                  {f.response_notes && (
+                    <div className="text-[11px] text-slate-400 mt-0.5 truncate">"{f.response_notes}"</div>
+                  )}
                 </div>
-                <CheckCircle2 size={16} className="text-emerald-500" />
+                <CheckCircle2 size={16} className="text-emerald-500 flex-shrink-0" />
               </div>
               );
             })}
