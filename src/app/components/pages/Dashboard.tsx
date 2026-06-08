@@ -9,7 +9,7 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from "recharts";
-import { useDashboardStats, useTodayAppointments } from "../../../hooks/usePRAData";
+import { useDashboardStats, useTodayAppointments, useQueries, useFollowUps } from "../../../hooks/usePRAData";
 
 const visitTypes = [
   { name: "Follow-up", value: 45, color: "#10b981" },
@@ -18,11 +18,6 @@ const visitTypes = [
   { name: "Emergency", value: 10, color: "#f43f5e" },
 ];
 
-const attentionItems = [
-  { name: "Kavitha S.", sub: "No response · 3 days overdue", type: "call", urgency: "red" },
-  { name: "Dinesh R.", sub: "Requested appointment booking", type: "book", urgency: "amber" },
-  { name: "Meena T.", sub: "No response · 2 days overdue", type: "call", urgency: "red" },
-];
 
 const avatarColors = [
   "from-violet-400 to-purple-500", "from-pink-400 to-rose-500", "from-sky-400 to-blue-500",
@@ -96,9 +91,15 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
   const [activeTab, setActiveTab] = useState<"today" | "week" | "month">("today");
   const { data: stats, loading: statsLoading, error: statsError, refetch: refetchStats } = useDashboardStats();
   const { data: todayAppts, loading: apptsLoading, error: apptsError } = useTodayAppointments();
+  const { data: queries } = useQueries();
+  const { data: followUps } = useFollowUps();
+
+  const pendingQueries = queries.filter(q => q.status?.toLowerCase() === "pending");
+  const pendingFollowUps = followUps.filter(f => !f.completed_at);
+  const attentionTotal = pendingQueries.length + pendingFollowUps.length;
 
   const weekData = stats.weekly_appointments.map((d) => ({
-    day: new Date(d.date).toLocaleDateString("en-US", { weekday: "short" }),
+    day: new Date(d.date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short" }),
     appointments: d.count,
     walkins: 0,
     completed: 0,
@@ -345,24 +346,40 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
                 </span>
                 Needs Attention
               </h3>
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-600">3</span>
+              {attentionTotal > 0 && (
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-600">{attentionTotal}</span>
+              )}
             </div>
-            {attentionItems.map((item, i) => (
-              <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors cursor-pointer">
-                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${item.urgency === "red" ? "bg-rose-500" : "bg-amber-500"}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-medium text-slate-800">{item.name}</div>
-                  <div className="text-[11px] text-slate-400 truncate">{item.sub}</div>
-                </div>
-                <button className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-colors ${
-                  item.type === "call"
-                    ? "bg-rose-50 text-rose-600 hover:bg-rose-100"
-                    : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                }`}>
-                  {item.type === "call" ? "📞 Call" : "📅 Book"}
-                </button>
-              </div>
-            ))}
+            {attentionTotal === 0 ? (
+              <div className="px-4 py-6 text-center text-[12px] text-slate-400">All clear — nothing needs attention</div>
+            ) : (
+              <>
+                {pendingFollowUps.slice(0, 3).map((f, i) => (
+                  <div key={f.id ?? i} className="flex items-center gap-3 px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors cursor-pointer">
+                    <div className="w-2 h-2 rounded-full flex-shrink-0 bg-rose-500" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-medium text-slate-800">{f.patients?.name ?? "Patient"}</div>
+                      <div className="text-[11px] text-slate-400 truncate">Follow-up pending</div>
+                    </div>
+                    <button className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors">
+                      📞 Call
+                    </button>
+                  </div>
+                ))}
+                {pendingQueries.slice(0, 3).map((q, i) => (
+                  <div key={q.id ?? i} className="flex items-center gap-3 px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors cursor-pointer">
+                    <div className="w-2 h-2 rounded-full flex-shrink-0 bg-amber-500" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-medium text-slate-800">{q.patients?.name ?? "Patient"}</div>
+                      <div className="text-[11px] text-slate-400 truncate">Query awaiting reply</div>
+                    </div>
+                    <button className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors">
+                      💬 Reply
+                    </button>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
 
           {/* Week bar chart */}

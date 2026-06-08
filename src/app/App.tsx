@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Sidebar, type Page } from "./components/Sidebar";
+import { useQueries, useFollowUps } from "../hooks/usePRAData";
 import { Topbar } from "./components/Topbar";
 import { Dashboard } from "./components/pages/Dashboard";
 import { Appointments } from "./components/pages/Appointments";
@@ -71,6 +72,10 @@ function NewAppointmentModal({ onClose }: { onClose: () => void }) {
 export default function App() {
   const [activePage, setActivePage] = useState<Page>("dashboard");
   const [showModal, setShowModal] = useState(false);
+  const { data: queries } = useQueries();
+  const { data: followUps } = useFollowUps();
+  const queriesBadge = queries.filter(q => q.status?.toLowerCase() === "pending").length;
+  const followupsBadge = followUps.filter(f => !f.completed_at).length;
 
   const renderPage = () => {
     switch (activePage) {
@@ -91,7 +96,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-      <Sidebar activePage={activePage} onNavigate={setActivePage} />
+      <Sidebar activePage={activePage} onNavigate={setActivePage} queriesBadge={queriesBadge} followupsBadge={followupsBadge} />
       <div className="ml-60 flex flex-col min-h-screen">
         <Topbar activePage={activePage} onNewAppointment={() => setShowModal(true)} />
         <main className="flex-1 overflow-y-auto">

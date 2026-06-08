@@ -56,6 +56,7 @@ export interface FollowUp {
   patient_id: string;
   status: "pending" | "completed" | "no_response";
   created_at: string;
+  completed_at?: string | null;
   patients?: Pick<Patient, "name" | "mobile" | "language">;
 }
 

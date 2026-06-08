@@ -25,14 +25,14 @@ const navSections: { label: string; items: NavItem[] }[] = [
     label: "Clinical",
     items: [
       { icon: <Pill size={16} />, label: "Prescriptions", page: "prescriptions" },
-      { icon: <FlaskConical size={16} />, label: "Lab Reports", page: "lab", badge: 7, badgeColor: "blue" },
-      { icon: <MessageCircle size={16} />, label: "Queries", page: "queries", badge: 5, badgeColor: "red" },
+      { icon: <FlaskConical size={16} />, label: "Lab Reports", page: "lab", badgeColor: "blue" },
+      { icon: <MessageCircle size={16} />, label: "Queries", page: "queries", badgeColor: "red" },
     ],
   },
   {
     label: "Outreach",
     items: [
-      { icon: <Phone size={16} />, label: "Follow-ups", page: "followups", badge: 3, badgeColor: "amber" },
+      { icon: <Phone size={16} />, label: "Follow-ups", page: "followups", badgeColor: "amber" },
       { icon: <Star size={16} />, label: "Reviews", page: "reviews" },
       { icon: <BarChart3 size={16} />, label: "Analytics", page: "analytics" },
     ],
@@ -52,7 +52,22 @@ const badgeStyles: Record<string, string> = {
   amber: "bg-amber-100 text-amber-700",
 };
 
-export function Sidebar({ activePage, onNavigate }: { activePage: Page; onNavigate: (p: Page) => void }) {
+export function Sidebar({
+  activePage,
+  onNavigate,
+  queriesBadge = 0,
+  followupsBadge = 0,
+}: {
+  activePage: Page;
+  onNavigate: (p: Page) => void;
+  queriesBadge?: number;
+  followupsBadge?: number;
+}) {
+  const dynamicBadges: Partial<Record<Page, number>> = {
+    queries: queriesBadge,
+    followups: followupsBadge,
+  };
+
   return (
     <aside className="fixed left-0 top-0 bottom-0 w-60 bg-white border-r border-slate-100 flex flex-col z-50 shadow-sm">
       {/* Logo */}
@@ -100,11 +115,14 @@ export function Sidebar({ activePage, onNavigate }: { activePage: Page; onNaviga
                       {item.icon}
                     </span>
                     <span className="flex-1 text-left">{item.label}</span>
-                    {item.badge && (
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? "bg-white/25 text-white" : badgeStyles[item.badgeColor || "teal"]}`}>
-                        {item.badge}
-                      </span>
-                    )}
+                    {(() => {
+                      const count = dynamicBadges[item.page] ?? item.badge;
+                      return count ? (
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isActive ? "bg-white/25 text-white" : badgeStyles[item.badgeColor || "teal"]}`}>
+                          {count}
+                        </span>
+                      ) : null;
+                    })()}
                     {isActive && <ChevronRight size={14} className="text-white/70" />}
                   </button>
                 );
