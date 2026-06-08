@@ -16,7 +16,7 @@ const navSections: { label: string; items: NavItem[] }[] = [
     label: "Main",
     items: [
       { icon: <LayoutDashboard size={16} />, label: "Overview", page: "dashboard" },
-      { icon: <CalendarDays size={16} />, label: "Appointments", page: "appointments", badge: 12, badgeColor: "teal" },
+      { icon: <CalendarDays size={16} />, label: "Appointments", page: "appointments", badgeColor: "teal" },
       { icon: <Hash size={16} />, label: "Queue", page: "queue" },
       { icon: <Users size={16} />, label: "Patients", page: "patients" },
     ],
@@ -57,15 +57,18 @@ export function Sidebar({
   onNavigate,
   queriesBadge = 0,
   followupsBadge = 0,
+  appointmentsBadge = 0,
 }: {
   activePage: Page;
   onNavigate: (p: Page) => void;
   queriesBadge?: number;
   followupsBadge?: number;
+  appointmentsBadge?: number;
 }) {
   const dynamicBadges: Partial<Record<Page, number>> = {
     queries: queriesBadge,
     followups: followupsBadge,
+    appointments: appointmentsBadge,
   };
 
   return (
