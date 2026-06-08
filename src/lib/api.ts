@@ -123,7 +123,7 @@ export interface Query {
   status: "Pending" | "Closed";
   priority?: string;
   created_at: string;
-  patients?: Pick<Patient, "name" | "mobile">;
+  patients?: Pick<Patient, "name" | "mobile" | "patient_code" | "age" | "gender" | "language" | "created_at">;
 }
 
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
@@ -153,11 +153,12 @@ export const api = {
   },
 
   appointments: {
-    list: (doctorId: string, date?: string, dateFrom?: string, dateTo?: string) => {
+    list: (doctorId: string, date?: string, dateFrom?: string, dateTo?: string, patientId?: string) => {
       const params = new URLSearchParams({ doctor_id: doctorId });
       if (date) params.set("date", date);
       if (dateFrom) params.set("date_from", dateFrom);
       if (dateTo)   params.set("date_to",   dateTo);
+      if (patientId) params.set("patient_id", patientId);
       return req<Appointment[]>(`/appointments?${params}`);
     },
     today: (doctorId: string) =>
