@@ -27,7 +27,14 @@ function makeEmptyMed(): MedicineFormRow {
   };
 }
 
-function ChipSuggest({ options, onSelect, currentValue = "" }: { options: string[]; onSelect: (v: string) => void; currentValue?: string }) {
+function ChipSuggest({
+  options, onSelect, onDeselect, currentValue = "",
+}: {
+  options: string[];
+  onSelect: (v: string) => void;
+  onDeselect: (v: string) => void;
+  currentValue?: string;
+}) {
   return (
     <div className="flex flex-wrap gap-1.5 mt-2">
       {options.map(opt => {
@@ -36,11 +43,11 @@ function ChipSuggest({ options, onSelect, currentValue = "" }: { options: string
           <button
             key={opt}
             type="button"
-            onClick={() => !selected && onSelect(opt)}
+            onClick={() => selected ? onDeselect(opt) : onSelect(opt)}
             className={`px-2.5 py-1 text-[11px] rounded-full border font-medium transition-colors ${
               selected
-                ? "bg-emerald-500 text-white border-emerald-500 cursor-default"
-                : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 cursor-pointer"
+                ? "bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600"
+                : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300"
             }`}
           >
             {selected ? "✓ " : ""}{opt}
@@ -118,6 +125,13 @@ export function PrescriptionWriter() {
       ...prev,
       [field]: prev[field] ? `${prev[field]}, ${val}` : val,
     }));
+  };
+
+  const removeChip = (field: keyof typeof form, val: string) => {
+    setForm(prev => {
+      const parts = prev[field].split(",").map(s => s.trim()).filter(s => s.toLowerCase() !== val.toLowerCase());
+      return { ...prev, [field]: parts.join(", ") };
+    });
   };
 
   // ── PRINT ──────────────────────────────────────────────
@@ -377,6 +391,7 @@ export function PrescriptionWriter() {
                 options={DIAGNOSIS_SUGGESTIONS}
                 currentValue={form.diagnosis}
                 onSelect={v => setForm(f => ({ ...f, diagnosis: f.diagnosis ? `${f.diagnosis}, ${v}` : v }))}
+                onDeselect={v => removeChip("diagnosis", v)}
               />
             </div>
 
@@ -410,7 +425,7 @@ export function PrescriptionWriter() {
                 className="w-full px-3.5 py-2.5 text-[13px] border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition-shadow"
               />
               <p className="text-[10px] text-slate-400 mt-1.5 mb-0.5">Quick select:</p>
-              <ChipSuggest options={DIETARY_NOTES_OPTIONS} currentValue={form.dietary_instructions} onSelect={v => appendChip("dietary_instructions", v)} />
+              <ChipSuggest options={DIETARY_NOTES_OPTIONS} currentValue={form.dietary_instructions} onSelect={v => appendChip("dietary_instructions", v)} onDeselect={v => removeChip("dietary_instructions", v)} />
             </div>
 
             <div>
@@ -424,7 +439,7 @@ export function PrescriptionWriter() {
                 className="w-full px-3.5 py-2.5 text-[13px] border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition-shadow"
               />
               <p className="text-[10px] text-slate-400 mt-1.5 mb-0.5">Quick select:</p>
-              <ChipSuggest options={PRECAUTION_OPTIONS} currentValue={form.precautions} onSelect={v => appendChip("precautions", v)} />
+              <ChipSuggest options={PRECAUTION_OPTIONS} currentValue={form.precautions} onSelect={v => appendChip("precautions", v)} onDeselect={v => removeChip("precautions", v)} />
             </div>
           </SectionCard>
 

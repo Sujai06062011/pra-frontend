@@ -214,7 +214,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
             <div className="text-center">
               <div className="text-[10px] uppercase tracking-widest text-slate-400 mb-1">Now Serving</div>
               <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 44, lineHeight: 1, color: "#10b981" }} className="drop-shadow-sm">
-                {statsLoading ? "—" : stats.current_token}
+                {statsLoading ? "—" : ((stats.current_token ?? 0) + 1 <= (stats.today_appointments ?? 0) ? (stats.current_token ?? 0) + 1 : stats.current_token || "—")}
               </div>
             </div>
             <div className="w-px h-14 bg-slate-100" />
