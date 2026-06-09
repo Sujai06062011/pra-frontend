@@ -371,9 +371,22 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <button className="text-[11px] font-semibold px-3 py-1 rounded-lg border border-slate-200 text-slate-500 hover:border-emerald-300 hover:text-emerald-600 transition-all">
-                        View
-                      </button>
+                      <div className="flex gap-2">
+                        <button className="text-[11px] font-semibold px-3 py-1 rounded-lg border border-slate-200 text-slate-500 hover:border-emerald-300 hover:text-emerald-600 transition-all">
+                          View
+                        </button>
+                        {mappedStatus === "in-progress" && (
+                          <button
+                            onClick={() => {
+                              const params = new URLSearchParams({ patient_id: apt.patient_id, appointment_id: apt.id });
+                              window.location.href = `/prescriptions/new?${params}`;
+                            }}
+                            className="text-[11px] font-semibold px-3 py-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-all shadow-sm"
+                          >
+                            ✍️ Prescribe
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

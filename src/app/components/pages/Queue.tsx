@@ -86,8 +86,8 @@ export function Queue() {
         ) : (
         <div className="divide-y divide-slate-50">
           {data.appointments.map((p, idx) => {
-            const isCurrent = p.token_number === current;
-            const isDone = p.status === "Cancelled" || (p.token_number !== undefined && p.token_number < current);
+            const isCurrent = p.token_number === current + 1;
+            const isDone = p.status === "Cancelled" || (p.token_number !== undefined && p.token_number <= current);
             const color = avatarColors[idx % avatarColors.length];
             const name = p.patients?.name || "Unknown";
             return (
@@ -125,9 +125,20 @@ export function Queue() {
                     </span>
                   )}
                   {p.status === "Confirmed" && isCurrent && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                      <Activity size={11} /> In Progress
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                        <Activity size={11} /> In Progress
+                      </span>
+                      <button
+                        onClick={() => {
+                          const params = new URLSearchParams({ patient_id: p.patient_id, appointment_id: p.id });
+                          window.location.href = `/prescriptions/new?${params}`;
+                        }}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500 text-white hover:bg-emerald-600 transition-colors shadow-sm"
+                      >
+                        ✍️ Prescribe
+                      </button>
+                    </div>
                   )}
                   {p.status === "Confirmed" && !isDone && !isCurrent && (
                     <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">

@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Printer, MessageSquare, Plus, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import {
+  ArrowLeft, Printer, MessageSquare, Plus, Loader2, CheckCircle, AlertCircle,
+  Stethoscope, Apple, Pill, FileText, User, Calendar, Hash, Phone, Globe,
+} from "lucide-react";
 import { api, type Patient } from "../../../lib/api";
 import { MedicineRow, type MedicineFormRow } from "../prescription/MedicineRow";
 import {
@@ -7,8 +10,6 @@ import {
   PRECAUTION_OPTIONS,
 } from "../../../lib/medicineConstants";
 import { useAuth } from "../../../context/AuthContext";
-
-const DOCTOR_ID = "8c33abe0-5d2e-4613-9437-c7c375e8d162";
 
 function makeEmptyMed(): MedicineFormRow {
   return {
@@ -34,11 +35,35 @@ function ChipSuggest({ options, onSelect }: { options: string[]; onSelect: (v: s
           key={opt}
           type="button"
           onClick={() => onSelect(opt)}
-          className="px-2.5 py-1 text-[11px] bg-slate-100 text-slate-600 rounded-full hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
+          className="px-2.5 py-1 text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full hover:bg-emerald-100 hover:border-emerald-300 transition-colors font-medium"
         >
           {opt}
         </button>
       ))}
+    </div>
+  );
+}
+
+function SectionCard({
+  icon,
+  title,
+  accent,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  accent: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className={`px-5 py-3.5 flex items-center gap-2.5 border-b ${accent}`}>
+        <span className="opacity-80">{icon}</span>
+        <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 13 }} className="text-slate-800">
+          {title}
+        </h3>
+      </div>
+      <div className="p-5 space-y-4">{children}</div>
     </div>
   );
 }
@@ -96,7 +121,7 @@ export function PrescriptionWriter() {
         .filter(Boolean).join(" + ");
       const food = m.before_food ? "Before food" : "After food";
       return `
-        <div class="medicine" style="margin:8px 0;padding:6px 0;border-bottom:1px dashed #eee">
+        <div class="medicine">
           <p><strong>${i+1}. ${m.medicine_name}</strong> — ${m.dosage || ""}</p>
           <p style="color:#555">${times || "—"} | ${food} | ${m.duration_days} days</p>
           ${m.instructions ? `<p style="color:#777;font-style:italic">${m.instructions}</p>` : ""}
@@ -109,6 +134,7 @@ export function PrescriptionWriter() {
         h2{font-size:15px;margin:0 0 2px}
         p{margin:3px 0}
         .divider{border-top:1px solid #000;margin:10px 0}
+        .medicine{margin:8px 0;padding:6px 0;border-bottom:1px dashed #eee}
         .footer{margin-top:24px;text-align:right}
         @media print{body{padding:0}}
       </style></head><body>
@@ -180,12 +206,11 @@ export function PrescriptionWriter() {
         })),
       });
 
-      // Increment usage for DB-linked medicines
       for (const m of medicines) {
         if (m.medicine_id) api.medicines.incrementUsage(m.medicine_id).catch(() => {});
       }
 
-      setSuccessMsg(`✅ Prescription saved! ${result.whatsapp_sent ? "WhatsApp sent." : ""}`);
+      setSuccessMsg(`Prescription saved!${result.whatsapp_sent ? " WhatsApp sent." : ""}`);
       setTimeout(() => { window.location.href = "/"; }, 2200);
 
     } catch (err: any) {
@@ -198,7 +223,7 @@ export function PrescriptionWriter() {
   if (loadingPatient) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <Loader2 size={20} className="animate-spin text-emerald-500" />
+        <Loader2 size={24} className="animate-spin text-emerald-500" />
       </div>
     );
   }
@@ -206,121 +231,202 @@ export function PrescriptionWriter() {
   const today = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
   return (
-    <div className="min-h-screen bg-slate-50" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-      {/* Sticky header */}
-      <div className="sticky top-0 z-40 bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-4 shadow-sm">
-        <button onClick={() => window.history.back()} className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 text-[13px]">
-          <ArrowLeft size={15} /> Back
-        </button>
-        <div className="flex-1">
-          <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15 }} className="text-slate-800">
-            New Prescription
-            {patient && (
-              <span className="font-normal text-slate-500 ml-2">
-                — {patient.name}
-                {patient.patient_code && ` (${patient.patient_code})`}
-                {patient.age && ` · ${patient.age} yrs`}
-              </span>
-            )}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50/20 to-teal-50/20" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+
+      {/* ── Sticky header ── */}
+      <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center gap-4">
+          <button
+            onClick={() => window.history.back()}
+            className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 text-[13px] px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            <ArrowLeft size={15} /> Back
+          </button>
+
+          {/* Clinic badge */}
+          <div className="flex items-center gap-2.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center">
+              <Stethoscope size={13} className="text-white" />
+            </div>
+            <div>
+              <div className="text-[11px] font-bold text-emerald-800 leading-none">{clinicName}</div>
+              <div className="text-[10px] text-emerald-600 mt-0.5">{doctorName}</div>
+            </div>
           </div>
-          <div className="text-[11px] text-slate-400">{today}</div>
+
+          <div className="flex-1">
+            <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 16 }} className="text-slate-800">
+              New Prescription
+              {patient && (
+                <span className="font-normal text-slate-500 text-[14px] ml-2">
+                  — {patient.name}
+                  {patient.patient_code && (
+                    <span className="ml-1.5 text-[11px] bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-semibold">
+                      {patient.patient_code}
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+              <Calendar size={10} /> {today}
+            </div>
+          </div>
+
+          {/* Status messages */}
+          {successMsg && (
+            <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[13px] font-semibold px-3.5 py-2 rounded-xl">
+              <CheckCircle size={15} /> {successMsg}
+            </div>
+          )}
+          {errorMsg && (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 text-[13px] px-3.5 py-2 rounded-xl">
+              <AlertCircle size={15} /> {errorMsg}
+            </div>
+          )}
+
+          {/* Action buttons in header */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-xl text-[12px] font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              <Printer size={13} /> Print
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white text-[13px] font-bold px-5 py-2 rounded-xl shadow-md shadow-emerald-200 transition-all active:scale-95"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <MessageSquare size={14} />}
+              {saving ? "Saving…" : "Save & Send WhatsApp"}
+            </button>
+          </div>
         </div>
-        {successMsg && (
-          <div className="flex items-center gap-1.5 text-emerald-600 text-[13px] font-medium">
-            <CheckCircle size={15} /> {successMsg}
-          </div>
-        )}
-        {errorMsg && (
-          <div className="flex items-center gap-1.5 text-red-500 text-[13px]">
-            <AlertCircle size={15} /> {errorMsg}
-          </div>
-        )}
       </div>
 
-      {/* Body */}
+      {/* ── Body ── */}
       <div className="max-w-6xl mx-auto px-6 py-6 flex gap-6">
 
         {/* LEFT — main form */}
-        <div className="flex-1 space-y-5">
+        <div className="flex-1 space-y-5 min-w-0">
 
           {/* Visit Details */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-            <h3 className="text-[13px] font-bold text-slate-700">Visit Details</h3>
-
+          <SectionCard
+            icon={<Stethoscope size={16} className="text-blue-600" />}
+            title="Visit Details"
+            accent="bg-blue-50 border-blue-100"
+          >
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
                 Chief Complaint <span className="text-red-400">*</span>
               </label>
               <textarea
                 rows={2}
                 value={form.chief_complaint}
                 onChange={e => setForm(f => ({ ...f, chief_complaint: e.target.value }))}
-                placeholder="Patient's main complaint..."
-                className={`w-full px-3 py-2.5 text-[13px] border rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300 resize-none ${errors.chief_complaint ? "border-red-300" : "border-slate-200"}`}
+                placeholder="e.g. Fever for 2 days, cough and cold..."
+                className={`w-full px-3.5 py-2.5 text-[13px] border rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 resize-none transition-shadow ${errors.chief_complaint ? "border-red-300 bg-red-50/30" : "border-slate-200 hover:border-slate-300"}`}
               />
-              {errors.chief_complaint && <p className="text-[11px] text-red-500 mt-1">{errors.chief_complaint}</p>}
+              {errors.chief_complaint && (
+                <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle size={11} /> {errors.chief_complaint}
+                </p>
+              )}
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
                 Diagnosis <span className="text-red-400">*</span>
               </label>
               <input
                 value={form.diagnosis}
                 onChange={e => setForm(f => ({ ...f, diagnosis: e.target.value }))}
                 placeholder="Primary diagnosis"
-                className={`w-full px-3 py-2.5 text-[13px] border rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300 ${errors.diagnosis ? "border-red-300" : "border-slate-200"}`}
+                className={`w-full px-3.5 py-2.5 text-[13px] border rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 transition-shadow ${errors.diagnosis ? "border-red-300 bg-red-50/30" : "border-slate-200 hover:border-slate-300"}`}
               />
-              {errors.diagnosis && <p className="text-[11px] text-red-500 mt-1">{errors.diagnosis}</p>}
+              {errors.diagnosis && (
+                <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle size={11} /> {errors.diagnosis}
+                </p>
+              )}
+              <p className="text-[10px] text-slate-400 mt-1.5 mb-0.5">Quick select:</p>
               <ChipSuggest
                 options={DIAGNOSIS_SUGGESTIONS}
                 onSelect={v => setForm(f => ({ ...f, diagnosis: f.diagnosis ? `${f.diagnosis}, ${v}` : v }))}
               />
             </div>
-          </div>
-
-          {/* Dietary & Precautions */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-            <h3 className="text-[13px] font-bold text-slate-700">Dietary & Precautions</h3>
 
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Dietary Instructions</label>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                Additional Notes
+              </label>
+              <input
+                value={form.notes}
+                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="Any additional clinical notes..."
+                className="w-full px-3.5 py-2.5 text-[13px] border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 transition-shadow"
+              />
+            </div>
+          </SectionCard>
+
+          {/* Dietary & Precautions */}
+          <SectionCard
+            icon={<Apple size={16} className="text-orange-500" />}
+            title="Dietary & Precautions"
+            accent="bg-orange-50 border-orange-100"
+          >
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                Dietary Instructions
+              </label>
               <input
                 value={form.dietary_instructions}
                 onChange={e => setForm(f => ({ ...f, dietary_instructions: e.target.value }))}
-                placeholder="e.g. Avoid oily and spicy food"
-                className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                placeholder="e.g. Avoid oily and spicy food, drink plenty of fluids"
+                className="w-full px-3.5 py-2.5 text-[13px] border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition-shadow"
               />
+              <p className="text-[10px] text-slate-400 mt-1.5 mb-0.5">Quick select:</p>
               <ChipSuggest options={DIETARY_NOTES_OPTIONS} onSelect={v => appendChip("dietary_instructions", v)} />
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Precautions</label>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                Precautions
+              </label>
               <input
                 value={form.precautions}
                 onChange={e => setForm(f => ({ ...f, precautions: e.target.value }))}
                 placeholder="e.g. Complete bed rest for 2 days"
-                className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                className="w-full px-3.5 py-2.5 text-[13px] border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition-shadow"
               />
+              <p className="text-[10px] text-slate-400 mt-1.5 mb-0.5">Quick select:</p>
               <ChipSuggest options={PRECAUTION_OPTIONS} onSelect={v => appendChip("precautions", v)} />
             </div>
-
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Additional Notes</label>
-              <input
-                value={form.notes}
-                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                placeholder="Any additional notes..."
-                className="w-full px-3 py-2 text-[13px] border border-slate-200 rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300"
-              />
-            </div>
-          </div>
+          </SectionCard>
 
           {/* Medicines */}
-          <div className="space-y-3">
-            <h3 className="text-[13px] font-bold text-slate-700 px-1">Medicines</h3>
-            {errors.medicines && <p className="text-[12px] text-red-500 px-1">{errors.medicines}</p>}
-            {errors.timing   && <p className="text-[12px] text-red-500 px-1">{errors.timing}</p>}
+          <div>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-400 to-purple-600 flex items-center justify-center shadow-sm">
+                  <Pill size={14} className="text-white" />
+                </div>
+                <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 14 }} className="text-slate-800">
+                  Medicines
+                </h3>
+                <span className="text-[11px] bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-semibold">
+                  {medicines.filter(m => m.medicine_name.trim()).length} added
+                </span>
+              </div>
+            </div>
+
+            {(errors.medicines || errors.timing) && (
+              <div className="mb-3 px-4 py-2.5 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-[12px] text-red-600 font-medium">
+                <AlertCircle size={13} />
+                {errors.medicines || errors.timing}
+              </div>
+            )}
 
             {medicines.map((med, idx) => (
               <MedicineRow
@@ -335,62 +441,127 @@ export function PrescriptionWriter() {
             <button
               type="button"
               onClick={addMedicine}
-              className="w-full py-3 border-2 border-dashed border-slate-200 rounded-2xl text-[13px] text-slate-400 hover:border-emerald-300 hover:text-emerald-500 hover:bg-emerald-50/50 transition-all flex items-center justify-center gap-2"
+              className="w-full mt-3 py-4 border-2 border-dashed border-violet-200 rounded-2xl text-[13px] text-violet-500 font-semibold hover:border-violet-400 hover:text-violet-600 hover:bg-violet-50/50 transition-all flex items-center justify-center gap-2"
             >
-              <Plus size={15} /> Add Another Medicine
+              <Plus size={16} /> Add Another Medicine
             </button>
           </div>
 
-          {/* Action bar */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-3">
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 rounded-xl text-[13px] text-slate-600 hover:bg-slate-50 transition-colors"
-            >
-              <Printer size={14} /> Print
-            </button>
+          {/* Bottom action bar */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
             <button
               onClick={() => window.history.back()}
-              className="px-4 py-2.5 border border-slate-200 rounded-xl text-[13px] text-slate-600 hover:bg-slate-50 transition-colors"
+              className="px-4 py-2.5 border border-slate-200 rounded-xl text-[13px] text-slate-500 hover:bg-slate-50 transition-colors"
             >
               Cancel
+            </button>
+            <div className="flex-1" />
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              <Printer size={14} /> Print Prescription
             </button>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="ml-auto flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white text-[13px] font-semibold px-5 py-2.5 rounded-xl shadow-sm shadow-emerald-200 transition-colors"
+              className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-60 text-white text-[13px] font-bold px-6 py-2.5 rounded-xl shadow-md shadow-emerald-200 transition-all active:scale-95"
             >
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <MessageSquare size={14} />}
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <MessageSquare size={15} />}
               {saving ? "Saving…" : "Save & Send WhatsApp"}
             </button>
           </div>
         </div>
 
         {/* RIGHT — patient info panel */}
-        <div className="w-72 flex-shrink-0">
-          {patient && (
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 sticky top-20 space-y-4">
-              <h3 className="text-[13px] font-bold text-slate-700">Patient Info</h3>
-              <div className="space-y-2.5">
+        <div className="w-72 flex-shrink-0 space-y-4">
+          {patient ? (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden sticky top-20">
+              {/* Patient header */}
+              <div className="bg-gradient-to-br from-violet-500 to-purple-600 px-5 py-4">
+                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center mb-3 text-white text-xl font-bold">
+                  {patient.name?.[0] ?? "?"}
+                </div>
+                <div className="text-white font-bold text-[15px] leading-snug">{patient.name}</div>
+                {patient.patient_code && (
+                  <div className="mt-1 inline-flex items-center gap-1 text-[11px] bg-white/20 text-white px-2 py-0.5 rounded-full font-semibold">
+                    <Hash size={9} /> {patient.patient_code}
+                  </div>
+                )}
+              </div>
+
+              {/* Details */}
+              <div className="px-5 py-4 space-y-3">
                 {[
-                  ["Name", patient.name],
-                  ["Code", patient.patient_code || "—"],
-                  ["Age", patient.age ? `${patient.age} yrs` : "—"],
-                  ["Gender", patient.gender || "—"],
-                  ["Mobile", patient.mobile],
-                  ["Language", patient.language || "English"],
-                ].map(([label, value]) => (
-                  <div key={label} className="flex items-start gap-2">
-                    <span className="text-[11px] uppercase tracking-wider text-slate-400 w-16 pt-0.5 flex-shrink-0">{label}</span>
-                    <span className="text-[13px] text-slate-700 font-medium">{value}</span>
+                  { icon: <User size={12} />, label: "Age / Gender", value: [patient.age ? `${patient.age} yrs` : null, patient.gender === "M" ? "Male" : patient.gender === "F" ? "Female" : patient.gender].filter(Boolean).join(" · ") || "—" },
+                  { icon: <Phone size={12} />, label: "Mobile", value: patient.mobile || "—" },
+                  { icon: <Globe size={12} />, label: "Language", value: patient.language ? patient.language.charAt(0).toUpperCase() + patient.language.slice(1) : "English" },
+                ].map(({ icon, label, value }) => (
+                  <div key={label} className="flex items-start gap-2.5">
+                    <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 flex-shrink-0 mt-0.5">
+                      {icon}
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{label}</div>
+                      <div className="text-[13px] text-slate-700 font-medium mt-0.5">{value}</div>
+                    </div>
                   </div>
                 ))}
               </div>
+
+              {/* WhatsApp note */}
+              <div className="mx-4 mb-4 px-3 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+                  <MessageSquare size={11} /> WhatsApp will be sent in{" "}
+                  <span className="capitalize">{patient.language || "english"}</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border border-slate-200 p-5">
+              <div className="text-center py-4">
+                <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
+                  <User size={20} className="text-slate-400" />
+                </div>
+                <p className="text-[13px] text-slate-400">No patient linked.</p>
+                <p className="text-[11px] text-slate-300 mt-1">Pass patient_id in URL</p>
+              </div>
             </div>
           )}
-          {!patient && !loadingPatient && (
-            <div className="bg-white rounded-2xl border border-slate-200 p-5">
-              <p className="text-[13px] text-slate-400">No patient linked. Pass patient_id in URL.</p>
+
+          {/* Summary preview */}
+          {(form.chief_complaint || form.diagnosis) && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden sticky top-[290px]">
+              <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+                <FileText size={13} className="text-slate-400" />
+                <span className="text-[12px] font-bold text-slate-600">Summary</span>
+              </div>
+              <div className="px-4 py-3 space-y-2">
+                {form.chief_complaint && (
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Complaint</div>
+                    <div className="text-[12px] text-slate-700 mt-0.5 line-clamp-2">{form.chief_complaint}</div>
+                  </div>
+                )}
+                {form.diagnosis && (
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Diagnosis</div>
+                    <div className="text-[12px] text-slate-700 mt-0.5 font-medium">{form.diagnosis}</div>
+                  </div>
+                )}
+                {medicines.filter(m => m.medicine_name.trim()).length > 0 && (
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Medicines</div>
+                    {medicines.filter(m => m.medicine_name.trim()).map(m => (
+                      <div key={m.id} className="text-[12px] text-slate-700 mt-0.5 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />
+                        {m.medicine_name}
+                        {m.dosage && <span className="text-slate-400 text-[11px]">· {m.dosage}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
