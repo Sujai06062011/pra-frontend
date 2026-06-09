@@ -13,6 +13,7 @@ import { FollowUps } from "./components/pages/FollowUps";
 import { Reviews } from "./components/pages/Reviews";
 import { Analytics } from "./components/pages/Analytics";
 import { Settings } from "./components/pages/Settings";
+import { ClinicMedicines } from "./components/pages/ClinicMedicines";
 
 // New Appointment modal
 function NewAppointmentModal({ onClose }: { onClose: () => void }) {
@@ -86,6 +87,7 @@ export default function App() {
       case "queue": return <Queue />;
       case "patients": return <Patients />;
       case "prescriptions": return <Prescriptions />;
+      case "medicines": return <ClinicMedicines />;
       case "lab": return <LabReports />;
       case "queries": return <Queries />;
       case "followups": return <FollowUps />;

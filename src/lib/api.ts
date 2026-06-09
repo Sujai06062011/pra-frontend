@@ -141,6 +141,46 @@ export interface Query {
   patients?: Pick<Patient, "name" | "mobile" | "patient_code" | "age" | "gender" | "language" | "created_at">;
 }
 
+export interface ClinicMedicine {
+  id: string;
+  name: string;
+  category: string;
+  dosages: string[];
+  form: "tablet" | "liquid" | "inhaler" | "topical" | "other";
+  usage_count: number;
+  is_active: boolean;
+}
+
+export interface PrescriptionWritePayload {
+  patient_id: string;
+  doctor_id?: string;
+  appointment_id?: string;
+  chief_complaint: string;
+  diagnosis: string;
+  notes?: string;
+  dietary_instructions?: string;
+  precautions?: string;
+  medicines: {
+    medicine_name: string;
+    dosage: string;
+    duration_days: number;
+    morning: boolean;
+    afternoon: boolean;
+    evening: boolean;
+    night: boolean;
+    before_food: boolean;
+    instructions?: string;
+    sort_order: number;
+  }[];
+}
+
+export interface PrescriptionWriteResult {
+  prescription_id: string;
+  visit_id: string;
+  whatsapp_sent: boolean;
+  patient_name: string;
+}
+
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -221,6 +261,28 @@ export const api = {
       }),
     getActive: (doctorId: string) =>
       req<Prescription[]>(`/prescriptions/active?doctor_id=${doctorId}`),
+    write: (data: PrescriptionWritePayload) =>
+      req<PrescriptionWriteResult>("/prescriptions/write", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+  },
+
+  medicines: {
+    search: (doctorId: string, query: string, limit = 8) =>
+      req<ClinicMedicine[]>(`/medicines?doctor_id=${doctorId}&search=${encodeURIComponent(query)}&limit=${limit}`),
+    list: (doctorId: string, limit = 100) =>
+      req<ClinicMedicine[]>(`/medicines?doctor_id=${doctorId}&limit=${limit}`),
+    categories: (doctorId: string) =>
+      req<string[]>(`/medicines/categories?doctor_id=${doctorId}`),
+    add: (data: Partial<ClinicMedicine> & { doctor_id: string }) =>
+      req<ClinicMedicine>("/medicines", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<ClinicMedicine>) =>
+      req<ClinicMedicine>(`/medicines/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+    deactivate: (id: string) =>
+      req<{ ok: boolean }>(`/medicines/${id}`, { method: "DELETE" }),
+    incrementUsage: (id: string) =>
+      req<{ ok: boolean }>(`/medicines/${id}/increment-usage`, { method: "PATCH" }),
   },
 
   followups: {

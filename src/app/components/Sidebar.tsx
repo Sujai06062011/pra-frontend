@@ -1,12 +1,12 @@
 import {
   LayoutDashboard, CalendarDays, Users, Hash, Pill, FlaskConical,
   MessageCircle, Phone, Star, BarChart3, Settings, ChevronRight,
-  Stethoscope, LogOut
+  Stethoscope, LogOut, Tablets
 } from "lucide-react";
 
 export type Page =
   | "dashboard" | "appointments" | "queue" | "patients"
-  | "prescriptions" | "lab" | "queries" | "followups"
+  | "prescriptions" | "medicines" | "lab" | "queries" | "followups"
   | "reviews" | "analytics" | "settings";
 
 interface NavItem { icon: React.ReactNode; label: string; page: Page; badge?: number; badgeColor?: string; }
@@ -25,6 +25,7 @@ const navSections: { label: string; items: NavItem[] }[] = [
     label: "Clinical",
     items: [
       { icon: <Pill size={16} />, label: "Prescriptions", page: "prescriptions" },
+      { icon: <Tablets size={16} />, label: "Medicines", page: "medicines" },
       { icon: <FlaskConical size={16} />, label: "Lab Reports", page: "lab", badgeColor: "blue" },
       { icon: <MessageCircle size={16} />, label: "Queries", page: "queries", badgeColor: "red" },
     ],
