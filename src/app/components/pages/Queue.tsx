@@ -10,7 +10,9 @@ const avatarColors = [
 export function Queue() {
   const { data, loading, error, refetch, callNext, callPrev } = useQueue();
   const current = data.current_token;
-  const currentPatient = data.appointments.find(p => p.token_number === current);
+  // In-progress = next token after current (or token 1 when queue hasn't started)
+  const inProgressToken = current + 1;
+  const currentPatient = data.appointments.find(p => p.token_number === inProgressToken);
 
   return (
     <div className="p-7 space-y-6">
@@ -29,7 +31,7 @@ export function Queue() {
         <div className="col-span-1 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-200 flex flex-col items-center justify-center gap-2">
           <div className="text-sm font-semibold opacity-80 uppercase tracking-widest">Now Serving</div>
           <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 80, lineHeight: 1 }}>
-            {loading ? "…" : current}
+            {loading ? "…" : (currentPatient ? inProgressToken : (current || "—"))}
           </div>
           {currentPatient && (
             <div className="text-center">

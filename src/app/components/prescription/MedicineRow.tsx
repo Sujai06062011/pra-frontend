@@ -220,18 +220,34 @@ export function MedicineRow({ index, medicine, onChange, onRemove, error }: Prop
         </div>
       </div>
 
-      {/* Before/After food */}
-      <button
-        type="button"
-        onClick={() => onChange({ ...medicine, before_food: !medicine.before_food })}
-        className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-[13px] font-medium transition-all ${
-          medicine.before_food
-            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-            : "bg-slate-50 text-slate-500 border-slate-200"
-        }`}
-      >
-        🍽 {medicine.before_food ? "Before food" : "After food"}
-      </button>
+      {/* Before/After food — two explicit buttons */}
+      <div>
+        <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Food Timing</label>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => onChange({ ...medicine, before_food: true })}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-[12px] font-semibold transition-all ${
+              medicine.before_food
+                ? "bg-amber-100 text-amber-800 border-amber-300"
+                : "bg-slate-50 text-slate-400 border-slate-200 hover:border-amber-200 hover:text-amber-600"
+            }`}
+          >
+            🌅 Before food
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange({ ...medicine, before_food: false })}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-[12px] font-semibold transition-all ${
+              !medicine.before_food
+                ? "bg-teal-100 text-teal-800 border-teal-300"
+                : "bg-slate-50 text-slate-400 border-slate-200 hover:border-teal-200 hover:text-teal-600"
+            }`}
+          >
+            🍽 After food
+          </button>
+        </div>
+      </div>
 
       {/* Instructions */}
       <div>

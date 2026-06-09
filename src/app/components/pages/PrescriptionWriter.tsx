@@ -27,19 +27,26 @@ function makeEmptyMed(): MedicineFormRow {
   };
 }
 
-function ChipSuggest({ options, onSelect }: { options: string[]; onSelect: (v: string) => void }) {
+function ChipSuggest({ options, onSelect, currentValue = "" }: { options: string[]; onSelect: (v: string) => void; currentValue?: string }) {
   return (
     <div className="flex flex-wrap gap-1.5 mt-2">
-      {options.map(opt => (
-        <button
-          key={opt}
-          type="button"
-          onClick={() => onSelect(opt)}
-          className="px-2.5 py-1 text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full hover:bg-emerald-100 hover:border-emerald-300 transition-colors font-medium"
-        >
-          {opt}
-        </button>
-      ))}
+      {options.map(opt => {
+        const selected = currentValue.toLowerCase().includes(opt.toLowerCase());
+        return (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => !selected && onSelect(opt)}
+            className={`px-2.5 py-1 text-[11px] rounded-full border font-medium transition-colors ${
+              selected
+                ? "bg-emerald-500 text-white border-emerald-500 cursor-default"
+                : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 cursor-pointer"
+            }`}
+          >
+            {selected ? "✓ " : ""}{opt}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -214,7 +221,10 @@ export function PrescriptionWriter() {
       setTimeout(() => { window.location.href = "/"; }, 2200);
 
     } catch (err: any) {
-      setErrorMsg(err.message || "Failed to save prescription");
+      const msg = err?.message || err?.toString() || "Failed to save prescription";
+      setErrorMsg(msg);
+      // Scroll to top so user sees the error in the header
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setSaving(false);
     }
@@ -305,6 +315,18 @@ export function PrescriptionWriter() {
         </div>
       </div>
 
+      {/* ── Fixed bottom toast for errors/success ── */}
+      {(successMsg || errorMsg) && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-5 py-3 rounded-2xl shadow-xl text-[13px] font-semibold border ${
+          successMsg
+            ? "bg-emerald-500 text-white border-emerald-600"
+            : "bg-red-50 text-red-700 border-red-200"
+        }`}>
+          {successMsg ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+          {successMsg || errorMsg}
+        </div>
+      )}
+
       {/* ── Body ── */}
       <div className="max-w-6xl mx-auto px-6 py-6 flex gap-6">
 
@@ -353,6 +375,7 @@ export function PrescriptionWriter() {
               <p className="text-[10px] text-slate-400 mt-1.5 mb-0.5">Quick select:</p>
               <ChipSuggest
                 options={DIAGNOSIS_SUGGESTIONS}
+                currentValue={form.diagnosis}
                 onSelect={v => setForm(f => ({ ...f, diagnosis: f.diagnosis ? `${f.diagnosis}, ${v}` : v }))}
               />
             </div>
@@ -387,7 +410,7 @@ export function PrescriptionWriter() {
                 className="w-full px-3.5 py-2.5 text-[13px] border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition-shadow"
               />
               <p className="text-[10px] text-slate-400 mt-1.5 mb-0.5">Quick select:</p>
-              <ChipSuggest options={DIETARY_NOTES_OPTIONS} onSelect={v => appendChip("dietary_instructions", v)} />
+              <ChipSuggest options={DIETARY_NOTES_OPTIONS} currentValue={form.dietary_instructions} onSelect={v => appendChip("dietary_instructions", v)} />
             </div>
 
             <div>
@@ -401,7 +424,7 @@ export function PrescriptionWriter() {
                 className="w-full px-3.5 py-2.5 text-[13px] border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition-shadow"
               />
               <p className="text-[10px] text-slate-400 mt-1.5 mb-0.5">Quick select:</p>
-              <ChipSuggest options={PRECAUTION_OPTIONS} onSelect={v => appendChip("precautions", v)} />
+              <ChipSuggest options={PRECAUTION_OPTIONS} currentValue={form.precautions} onSelect={v => appendChip("precautions", v)} />
             </div>
           </SectionCard>
 
