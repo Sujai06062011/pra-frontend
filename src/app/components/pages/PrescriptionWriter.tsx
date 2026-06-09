@@ -85,10 +85,13 @@ function SectionCard({
 export function PrescriptionWriter() {
   const { doctorId, clinicName, doctorName } = useAuth();
   const params = new URLSearchParams(window.location.search);
-  const patientId     = params.get("patient_id") || "";
-  const appointmentId = params.get("appointment_id") || "";
+  const patientId       = params.get("patient_id") || "";
+  const appointmentId   = params.get("appointment_id") || "";
+  const prescriptionId  = params.get("prescription_id") || "";  // edit mode when present
+  const isEditMode      = !!prescriptionId;
 
   const [patient, setPatient] = useState<Patient | null>(null);
+  const [visitId, setVisitId] = useState<string>("");
   const [loadingPatient, setLoadingPatient] = useState(true);
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
@@ -105,12 +108,60 @@ export function PrescriptionWriter() {
   const [medicines, setMedicines] = useState<MedicineFormRow[]>([makeEmptyMed()]);
 
   useEffect(() => {
-    if (!patientId) { setLoadingPatient(false); return; }
-    api.patients.get(patientId).then(p => {
-      setPatient(p);
-      setLoadingPatient(false);
-    }).catch(() => setLoadingPatient(false));
-  }, [patientId]);
+    if (isEditMode) {
+      // Load existing prescription and pre-populate
+      api.prescriptions.getDetail(prescriptionId).then(pres => {
+        if (!pres) { setLoadingPatient(false); return; }
+        // Populate patient from embedded data
+        if (pres.patients) {
+          setPatient(pres.patients as unknown as Patient);
+        } else if (pres.patient_id) {
+          api.patients.get(pres.patient_id).then(setPatient).catch(() => {});
+        }
+        // Visit fields
+        const v = (pres as any).visits;
+        if (v) {
+          setVisitId(v.id || "");
+          setForm({
+            chief_complaint:      v.chief_complaint || "",
+            diagnosis:            v.diagnosis || "",
+            notes:                v.notes || "",
+            dietary_instructions: pres.dietary_instructions || "",
+            precautions:          pres.precautions || "",
+          });
+        } else {
+          setForm(f => ({
+            ...f,
+            dietary_instructions: pres.dietary_instructions || "",
+            precautions:          pres.precautions || "",
+          }));
+        }
+        // Medicines
+        const meds: MedicineFormRow[] = ((pres.prescription_medicines ?? []) as any[]).map((m: any) => ({
+          id:            crypto.randomUUID(),
+          medicine_id:   undefined,
+          medicine_name: m.medicine_name || "",
+          form:          "tablet",
+          dosage:        m.dosage || "",
+          duration_days: m.duration_days ?? 5,
+          morning:       !!m.morning,
+          afternoon:     !!m.afternoon,
+          evening:       !!m.evening,
+          night:         !!m.night,
+          before_food:   !!m.before_food,
+          instructions:  m.instructions || "",
+        }));
+        setMedicines(meds.length > 0 ? meds : [makeEmptyMed()]);
+        setLoadingPatient(false);
+      }).catch(() => setLoadingPatient(false));
+    } else {
+      if (!patientId) { setLoadingPatient(false); return; }
+      api.patients.get(patientId).then(p => {
+        setPatient(p);
+        setLoadingPatient(false);
+      }).catch(() => setLoadingPatient(false));
+    }
+  }, [prescriptionId, patientId]);
 
   const addMedicine = () => setMedicines(prev => [...prev, makeEmptyMed()]);
   const updateMedicine = useCallback((idx: number, updated: MedicineFormRow) => {
@@ -203,41 +254,60 @@ export function PrescriptionWriter() {
     setErrors({});
     setSaving(true);
 
+    const medPayload = validMeds.map((m, i) => ({
+      medicine_name: m.medicine_name,
+      dosage:        m.dosage,
+      duration_days: m.duration_days,
+      morning:       m.morning,
+      afternoon:     m.afternoon,
+      evening:       m.evening,
+      night:         m.night,
+      before_food:   m.before_food,
+      instructions:  m.instructions,
+      sort_order:    i + 1,
+    }));
+
     try {
-      const result = await api.prescriptions.write({
-        patient_id:           patientId,
-        doctor_id:            doctorId,
-        appointment_id:       appointmentId || undefined,
-        chief_complaint:      form.chief_complaint,
-        diagnosis:            form.diagnosis,
-        notes:                form.notes,
-        dietary_instructions: form.dietary_instructions,
-        precautions:          form.precautions,
-        medicines: validMeds.map((m, i) => ({
-          medicine_name: m.medicine_name,
-          dosage:        m.dosage,
-          duration_days: m.duration_days,
-          morning:       m.morning,
-          afternoon:     m.afternoon,
-          evening:       m.evening,
-          night:         m.night,
-          before_food:   m.before_food,
-          instructions:  m.instructions,
-          sort_order:    i + 1,
-        })),
-      });
+      if (isEditMode) {
+        // ── UPDATE existing prescription ──────────────────
+        await api.prescriptions.update(prescriptionId, {
+          visit_id:             visitId || undefined,
+          chief_complaint:      form.chief_complaint,
+          diagnosis:            form.diagnosis,
+          notes:                form.notes,
+          dietary_instructions: form.dietary_instructions,
+          precautions:          form.precautions,
+          medicines:            medPayload,
+        });
+        setSuccessMsg("Prescription updated!");
+        // No redirect — stay on page so doctor can keep editing
+        setTimeout(() => setSuccessMsg(""), 3000);
 
-      for (const m of medicines) {
-        if (m.medicine_id) api.medicines.incrementUsage(m.medicine_id).catch(() => {});
+      } else {
+        // ── CREATE new prescription ───────────────────────
+        const result = await api.prescriptions.write({
+          patient_id:           patientId,
+          doctor_id:            doctorId,
+          appointment_id:       appointmentId || undefined,
+          chief_complaint:      form.chief_complaint,
+          diagnosis:            form.diagnosis,
+          notes:                form.notes,
+          dietary_instructions: form.dietary_instructions,
+          precautions:          form.precautions,
+          medicines:            medPayload,
+        });
+
+        for (const m of medicines) {
+          if (m.medicine_id) api.medicines.incrementUsage(m.medicine_id).catch(() => {});
+        }
+
+        setSuccessMsg(`Prescription saved!${result.whatsapp_sent ? " WhatsApp sent." : ""}`);
+        setTimeout(() => { window.location.href = "/"; }, 2200);
       }
-
-      setSuccessMsg(`Prescription saved!${result.whatsapp_sent ? " WhatsApp sent." : ""}`);
-      setTimeout(() => { window.location.href = "/"; }, 2200);
 
     } catch (err: any) {
       const msg = err?.message || err?.toString() || "Failed to save prescription";
       setErrorMsg(msg);
-      // Scroll to top so user sees the error in the header
       window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setSaving(false);
@@ -280,7 +350,7 @@ export function PrescriptionWriter() {
 
           <div className="flex-1">
             <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 16 }} className="text-slate-800">
-              New Prescription
+              {isEditMode ? "Edit Prescription" : "New Prescription"}
               {patient && (
                 <span className="font-normal text-slate-500 text-[14px] ml-2">
                   — {patient.name}
@@ -292,8 +362,15 @@ export function PrescriptionWriter() {
                 </span>
               )}
             </div>
-            <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-              <Calendar size={10} /> {today}
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                <Calendar size={10} /> {today}
+              </span>
+              {isEditMode && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                  ✏️ Editing
+                </span>
+              )}
             </div>
           </div>
 
@@ -323,7 +400,7 @@ export function PrescriptionWriter() {
               className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white text-[13px] font-bold px-5 py-2 rounded-xl shadow-md shadow-emerald-200 transition-all active:scale-95"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <MessageSquare size={14} />}
-              {saving ? "Saving…" : "Save & Send WhatsApp"}
+              {saving ? "Saving…" : isEditMode ? "Save Changes" : "Save & Send WhatsApp"}
             </button>
           </div>
         </div>
@@ -506,7 +583,7 @@ export function PrescriptionWriter() {
               className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-60 text-white text-[13px] font-bold px-6 py-2.5 rounded-xl shadow-md shadow-emerald-200 transition-all active:scale-95"
             >
               {saving ? <Loader2 size={15} className="animate-spin" /> : <MessageSquare size={15} />}
-              {saving ? "Saving…" : "Save & Send WhatsApp"}
+              {saving ? "Saving…" : isEditMode ? "Save Changes" : "Save & Send WhatsApp"}
             </button>
           </div>
         </div>

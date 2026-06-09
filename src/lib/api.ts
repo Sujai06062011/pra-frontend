@@ -266,6 +266,21 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+    getDetail: (prescriptionId: string) =>
+      req<Prescription & { visits?: { id: string; chief_complaint: string; diagnosis: string; notes: string } }>(`/prescriptions/${prescriptionId}/detail`),
+    update: (prescriptionId: string, data: {
+      visit_id?: string;
+      chief_complaint: string;
+      diagnosis: string;
+      notes: string;
+      dietary_instructions: string;
+      precautions: string;
+      medicines: PrescriptionWritePayload["medicines"];
+    }) =>
+      req<{ ok: boolean; prescription_id: string }>(`/prescriptions/${prescriptionId}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
   },
 
   medicines: {
