@@ -270,7 +270,8 @@ export function PrescriptionWriter() {
     try {
       if (isEditMode) {
         // ── UPDATE existing prescription ──────────────────
-        await api.prescriptions.update(prescriptionId, {
+        const result = await api.prescriptions.update(prescriptionId, {
+          patient_id:           patient?.id || patientId,
           visit_id:             visitId || undefined,
           chief_complaint:      form.chief_complaint,
           diagnosis:            form.diagnosis,
@@ -279,9 +280,9 @@ export function PrescriptionWriter() {
           precautions:          form.precautions,
           medicines:            medPayload,
         });
-        setSuccessMsg("Prescription updated!");
-        // No redirect — stay on page so doctor can keep editing
-        setTimeout(() => setSuccessMsg(""), 3000);
+        setSuccessMsg(`Prescription updated!${result.whatsapp_sent ? " WhatsApp sent." : ""}`);
+        // Stay on page so doctor can keep editing or print
+        setTimeout(() => setSuccessMsg(""), 4000);
 
       } else {
         // ── CREATE new prescription ───────────────────────
@@ -400,7 +401,7 @@ export function PrescriptionWriter() {
               className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white text-[13px] font-bold px-5 py-2 rounded-xl shadow-md shadow-emerald-200 transition-all active:scale-95"
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <MessageSquare size={14} />}
-              {saving ? "Saving…" : isEditMode ? "Save Changes" : "Save & Send WhatsApp"}
+              {saving ? "Saving…" : "Save & Send WhatsApp"}
             </button>
           </div>
         </div>
@@ -583,7 +584,7 @@ export function PrescriptionWriter() {
               className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-60 text-white text-[13px] font-bold px-6 py-2.5 rounded-xl shadow-md shadow-emerald-200 transition-all active:scale-95"
             >
               {saving ? <Loader2 size={15} className="animate-spin" /> : <MessageSquare size={15} />}
-              {saving ? "Saving…" : isEditMode ? "Save Changes" : "Save & Send WhatsApp"}
+              {saving ? "Saving…" : "Save & Send WhatsApp"}
             </button>
           </div>
         </div>
