@@ -16,6 +16,7 @@ const pageTitles: Record<Page, string> = {
   medicines: "Medicines",
   "new-appointment": "New Appointment",
   "register-patient": "Register Patient",
+  "new-prescription": "New Prescription",
 };
 
 export function Topbar({ activePage }: { activePage: Page }) {

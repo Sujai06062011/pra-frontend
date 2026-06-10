@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Sidebar, type Page } from "./components/Sidebar";
+import { Sidebar } from "./components/Sidebar";
+import type { Page } from "./components/Sidebar";
 import { useQueries, useFollowUps, useTodayAppointments } from "../hooks/usePRAData";
 import { Topbar } from "./components/Topbar";
 import { Dashboard } from "./components/pages/Dashboard";
@@ -16,10 +17,12 @@ import { Settings } from "./components/pages/Settings";
 import { ClinicMedicines } from "./components/pages/ClinicMedicines";
 import { NewAppointment } from "./components/pages/NewAppointment";
 import { PatientRegistration } from "./components/pages/PatientRegistration";
+import { PrescriptionWriter } from "./components/pages/PrescriptionWriter";
 
 export default function App() {
   const [activePage, setActivePage] = useState<Page>("dashboard");
   const [newApptPatientId, setNewApptPatientId] = useState<string>("");
+  const [rxParams, setRxParams] = useState<{ patientId?: string; appointmentId?: string; prescriptionId?: string }>({});
   const { data: queries } = useQueries();
   const { data: followUps } = useFollowUps();
   const { data: todayAppointments } = useTodayAppointments();
@@ -38,7 +41,12 @@ export default function App() {
       case "appointments": return <Appointments />;
       case "queue": return <Queue />;
       case "patients": return <Patients />;
-      case "prescriptions": return <Prescriptions />;
+      case "prescriptions": return (
+        <Prescriptions
+          onNewPrescription={() => { setRxParams({}); setActivePage("new-prescription"); }}
+          onEditPrescription={(patientId, prescriptionId) => { setRxParams({ patientId, prescriptionId }); setActivePage("new-prescription"); }}
+        />
+      );
       case "medicines": return <ClinicMedicines />;
       case "lab": return <LabReports />;
       case "queries": return <Queries />;
@@ -52,6 +60,15 @@ export default function App() {
           patientId={newApptPatientId}
           onNavigate={setActivePage}
           onRegisterPatient={() => setActivePage("register-patient")}
+        />
+      );
+      case "new-prescription": return (
+        <PrescriptionWriter
+          key={JSON.stringify(rxParams)}
+          patientId={rxParams.patientId}
+          appointmentId={rxParams.appointmentId}
+          prescriptionId={rxParams.prescriptionId}
+          onNavigate={(p) => setActivePage(p as Page)}
         />
       );
       case "register-patient": return (

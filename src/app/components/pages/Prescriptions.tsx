@@ -23,7 +23,12 @@ function daysLeft(endDate?: string): number | null {
   return diff;
 }
 
-export function Prescriptions() {
+interface PrescriptionsProps {
+  onNewPrescription?: () => void;
+  onEditPrescription?: (patientId: string, prescriptionId: string) => void;
+}
+
+export function Prescriptions({ onNewPrescription, onEditPrescription }: PrescriptionsProps = {}) {
   const { data: prescriptions, loading, error, refetch } = usePrescriptions();
 
   const withDays = prescriptions.map(p => ({ ...p, days: daysLeft(p.prescription_date) }));
@@ -59,7 +64,10 @@ export function Prescriptions() {
 
       <div className="flex items-center justify-between">
         <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15 }} className="text-slate-800">Prescriptions</h3>
-        <button className="flex items-center gap-1.5 text-[13px] font-semibold px-4 py-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors shadow-sm">
+        <button
+          onClick={onNewPrescription}
+          className="flex items-center gap-1.5 text-[13px] font-semibold px-4 py-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors shadow-sm"
+        >
           <Plus size={15} /> New Prescription
         </button>
       </div>
@@ -98,10 +106,7 @@ export function Prescriptions() {
                   <div className="text-[11px] text-slate-400 mt-0.5">Prescribed: {dateStr}</div>
                 </div>
                 <button
-                  onClick={() => {
-                    const params = new URLSearchParams({ patient_id: p.patient_id, prescription_id: p.id });
-                    window.location.href = `/prescriptions/new?${params}`;
-                  }}
+                  onClick={() => onEditPrescription ? onEditPrescription(p.patient_id, p.id) : (() => { const params = new URLSearchParams({ patient_id: p.patient_id, prescription_id: p.id }); window.location.href = `/prescriptions/new?${params}`; })()}
                   className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50 transition-all flex-shrink-0"
                 >
                   <Eye size={12} /> View

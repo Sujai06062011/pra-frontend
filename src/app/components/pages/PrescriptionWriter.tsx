@@ -82,12 +82,19 @@ function SectionCard({
   );
 }
 
-export function PrescriptionWriter() {
+interface PrescriptionWriterProps {
+  patientId?: string;
+  appointmentId?: string;
+  prescriptionId?: string;
+  onNavigate?: (page: string) => void;
+}
+
+export function PrescriptionWriter({ patientId: patientIdProp, appointmentId: appointmentIdProp, prescriptionId: prescriptionIdProp, onNavigate }: PrescriptionWriterProps = {}) {
   const { doctorId, clinicName, doctorName } = useAuth();
   const params = new URLSearchParams(window.location.search);
-  const patientId       = params.get("patient_id") || "";
-  const appointmentId   = params.get("appointment_id") || "";
-  const prescriptionId  = params.get("prescription_id") || "";  // edit mode when present
+  const patientId       = patientIdProp || params.get("patient_id") || "";
+  const appointmentId   = appointmentIdProp || params.get("appointment_id") || "";
+  const prescriptionId  = prescriptionIdProp || params.get("prescription_id") || "";
   const isEditMode      = !!prescriptionId;
 
   const [patient, setPatient] = useState<Patient | null>(null);
@@ -303,7 +310,7 @@ export function PrescriptionWriter() {
         }
 
         setSuccessMsg(`Prescription saved!${result.whatsapp_sent ? " WhatsApp sent." : ""}`);
-        setTimeout(() => { window.location.href = "/"; }, 2200);
+        setTimeout(() => { if (onNavigate) onNavigate("prescriptions"); else window.location.href = "/"; }, 2200);
       }
 
     } catch (err: any) {
@@ -317,7 +324,7 @@ export function PrescriptionWriter() {
 
   if (loadingPatient) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="h-full flex items-center justify-center py-24">
         <Loader2 size={24} className="animate-spin text-emerald-500" />
       </div>
     );
@@ -326,13 +333,13 @@ export function PrescriptionWriter() {
   const today = new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-emerald-50/20 to-teal-50/20" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+    <div className="min-h-full bg-gradient-to-br from-slate-50 via-emerald-50/20 to-teal-50/20" style={{ fontFamily: "'DM Sans', sans-serif" }}>
 
       {/* ── Sticky header ── */}
       <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center gap-4">
           <button
-            onClick={() => window.history.back()}
+            onClick={() => { if (onNavigate) onNavigate("prescriptions"); else window.history.back(); }}
             className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 text-[13px] px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
           >
             <ArrowLeft size={15} /> Back

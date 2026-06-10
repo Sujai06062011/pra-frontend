@@ -8,7 +8,7 @@ export type Page =
   | "dashboard" | "appointments" | "queue" | "patients"
   | "prescriptions" | "medicines" | "lab" | "queries" | "followups"
   | "reviews" | "analytics" | "settings"
-  | "new-appointment" | "register-patient";
+  | "new-appointment" | "register-patient" | "new-prescription";
 
 interface NavItem { icon: React.ReactNode; label: string; page: Page; badge?: number; badgeColor?: string; }
 
