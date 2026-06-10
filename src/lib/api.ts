@@ -247,7 +247,7 @@ export const api = {
     update: (id: string, data: Partial<Pick<Patient, "name" | "mobile" | "age" | "gender" | "language"> & { date_of_birth?: string; email?: string; address?: string; [key: string]: unknown }>) =>
       req<Patient>(`/patients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     search: (mobile: string) =>
-      req<{ patient_id: string; name: string; age?: number; mobile: string; last_visit_date?: string }>(`/patients/search?mobile=${encodeURIComponent(mobile)}`),
+      req<{ patient_id: string; name: string; age?: number; gender?: string; mobile: string; patient_code?: string; last_visit_date?: string }[]>(`/patients/search?mobile=${encodeURIComponent(mobile)}`),
   },
 
   appointments: {

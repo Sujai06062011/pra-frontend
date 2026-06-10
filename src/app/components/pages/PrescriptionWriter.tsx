@@ -87,9 +87,16 @@ interface FoundPatient {
   patient_id: string;
   name: string;
   age?: number;
+  gender?: string;
   mobile: string;
+  patient_code?: string;
   last_visit_date?: string;
 }
+
+const avatarColorsLookup = [
+  "bg-violet-500", "bg-emerald-500", "bg-sky-500", "bg-pink-500",
+  "bg-amber-500", "bg-teal-500", "bg-indigo-500", "bg-rose-500",
+];
 
 function PatientLookupPanel({
   onLinked,
@@ -102,29 +109,30 @@ function PatientLookupPanel({
 }) {
   const [mobile, setMobile] = useState("");
   const [mode, setMode] = useState<LookupMode>("idle");
-  const [found, setFound] = useState<FoundPatient | null>(null);
-  const [linked, setLinked] = useState(false);
+  const [results, setResults] = useState<FoundPatient[]>([]);
+  const [linked, setLinked] = useState<FoundPatient | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSearch = async () => {
     if (!mobile.trim()) return;
     setMode("searching");
-    setFound(null);
+    setResults([]);
     try {
-      const result = await api.patients.search(mobile.trim());
-      setFound(result);
+      const list = await api.patients.search(mobile.trim());
+      setResults(list);
       setMode("found");
     } catch {
       setMode("not_found");
     }
   };
 
-  const handleLink = () => {
-    if (!found) return;
-    setLinked(true);
+  const handleLink = (p: FoundPatient) => {
+    setLinked(p);
     setMode("linked");
-    onLinked(found);
+    onLinked(p);
   };
+
+  const genderLabel = (g?: string) => g === "M" ? "Male" : g === "F" ? "Female" : g || "";
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -162,7 +170,7 @@ function PatientLookupPanel({
 
         {/* Skip link */}
         {mode !== "linked" && (
-          <div className="text-right">
+          <div className="text-right -mt-1">
             <button
               onClick={onWalkin}
               className="text-[12px] text-slate-400 hover:text-slate-600 underline underline-offset-2 transition-colors"
@@ -172,37 +180,45 @@ function PatientLookupPanel({
           </div>
         )}
 
-        {/* Found */}
-        {mode === "found" && found && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center text-white font-bold text-[15px] flex-shrink-0">
-              {found.name[0]}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-slate-800 text-[14px]">{found.name}</div>
-              <div className="text-[12px] text-slate-500 mt-0.5">
-                {found.age ? `${found.age} yrs · ` : ""}
-                {found.mobile}
+        {/* Multiple results */}
+        {mode === "found" && results.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">
+              {results.length} patient{results.length > 1 ? "s" : ""} found — select one
+            </p>
+            {results.map((p, idx) => (
+              <div key={p.patient_id} className="bg-slate-50 border border-slate-200 hover:border-emerald-300 rounded-xl p-3 flex items-center gap-3 transition-colors">
+                <div className={`w-9 h-9 rounded-xl ${avatarColorsLookup[idx % avatarColorsLookup.length]} flex items-center justify-center text-white font-bold text-[13px] flex-shrink-0`}>
+                  {p.name[0]}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-slate-800 text-[13px] flex items-center gap-1.5">
+                    {p.name}
+                    {p.patient_code && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700">{p.patient_code}</span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">
+                    {[p.age ? `${p.age} yrs` : null, genderLabel(p.gender)].filter(Boolean).join(" · ")}
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleLink(p)}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-semibold rounded-lg transition-colors flex-shrink-0"
+                >
+                  <UserCheck size={12} /> Select
+                </button>
               </div>
-              {found.last_visit_date && (
-                <div className="text-[11px] text-slate-400 mt-0.5">Last visit: {found.last_visit_date}</div>
-              )}
-            </div>
-            <button
-              onClick={handleLink}
-              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-[12px] font-semibold rounded-lg transition-colors flex-shrink-0"
-            >
-              <UserCheck size={13} /> Link patient
-            </button>
+            ))}
           </div>
         )}
 
         {/* Linked confirmation */}
-        {mode === "linked" && found && (
+        {mode === "linked" && linked && (
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3">
             <CheckCircle size={18} className="text-emerald-500 flex-shrink-0" />
             <div>
-              <div className="font-semibold text-emerald-800 text-[13px]">Patient linked: {found.name}</div>
+              <div className="font-semibold text-emerald-800 text-[13px]">Patient linked: {linked.name}</div>
               <div className="text-[11px] text-emerald-600 mt-0.5">Prescription form is ready below</div>
             </div>
           </div>
