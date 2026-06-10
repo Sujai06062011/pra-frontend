@@ -13,9 +13,12 @@ const pageTitles: Record<Page, string> = {
   reviews: "Reviews",
   analytics: "Analytics",
   settings: "Clinic Settings",
+  medicines: "Medicines",
+  "new-appointment": "New Appointment",
+  "register-patient": "Register Patient",
 };
 
-export function Topbar({ activePage, onNewAppointment }: { activePage: Page; onNewAppointment: () => void }) {
+export function Topbar({ activePage }: { activePage: Page }) {
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
 

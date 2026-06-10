@@ -14,65 +14,12 @@ import { Reviews } from "./components/pages/Reviews";
 import { Analytics } from "./components/pages/Analytics";
 import { Settings } from "./components/pages/Settings";
 import { ClinicMedicines } from "./components/pages/ClinicMedicines";
-
-// New Appointment modal
-function NewAppointmentModal({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl border border-slate-200 shadow-2xl p-7 w-full max-w-md">
-        <h2 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 18 }} className="text-slate-800 mb-5">
-          New Appointment
-        </h2>
-        <div className="space-y-4">
-          {[
-            { label: "Patient Name", placeholder: "Enter patient name", type: "text" },
-            { label: "Age", placeholder: "Age in years", type: "number" },
-            { label: "Phone", placeholder: "+91 XXXXX XXXXX", type: "tel" },
-            { label: "Appointment Date", placeholder: "", type: "date" },
-            { label: "Time Slot", placeholder: "", type: "time" },
-          ].map(f => (
-            <div key={f.label}>
-              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">{f.label}</label>
-              <input
-                type={f.type}
-                placeholder={f.placeholder}
-                className="w-full px-3 py-2.5 text-[13px] border border-slate-200 rounded-xl text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400"
-              />
-            </div>
-          ))}
-          <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Visit Type</label>
-            <select className="w-full px-3 py-2.5 text-[13px] border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400 bg-white">
-              <option>Follow-up</option>
-              <option>New Visit</option>
-              <option>Referral</option>
-              <option>Emergency</option>
-            </select>
-          </div>
-        </div>
-        <div className="flex gap-3 mt-6">
-          <button
-            onClick={onClose}
-            className="flex-1 py-2.5 border border-slate-200 rounded-xl text-[13px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[13px] font-semibold shadow-sm shadow-emerald-200 transition-colors"
-          >
-            Book Appointment
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+import { NewAppointment } from "./components/pages/NewAppointment";
+import { PatientRegistration } from "./components/pages/PatientRegistration";
 
 export default function App() {
   const [activePage, setActivePage] = useState<Page>("dashboard");
-  const [showModal, setShowModal] = useState(false);
+  const [newApptPatientId, setNewApptPatientId] = useState<string>("");
   const { data: queries } = useQueries();
   const { data: followUps } = useFollowUps();
   const { data: todayAppointments } = useTodayAppointments();
@@ -80,10 +27,15 @@ export default function App() {
   const followupsBadge = followUps.filter(f => !f.completed_at).length;
   const appointmentsBadge = todayAppointments.length;
 
+  const goToNewAppt = (patientId = "") => {
+    setNewApptPatientId(patientId);
+    setActivePage("new-appointment");
+  };
+
   const renderPage = () => {
     switch (activePage) {
       case "dashboard": return <Dashboard onNavigate={setActivePage} />;
-      case "appointments": return <Appointments onNewAppointment={() => { window.location.href = "/appointments/new"; }} />;
+      case "appointments": return <Appointments />;
       case "queue": return <Queue />;
       case "patients": return <Patients />;
       case "prescriptions": return <Prescriptions />;
@@ -94,6 +46,20 @@ export default function App() {
       case "reviews": return <Reviews />;
       case "analytics": return <Analytics />;
       case "settings": return <Settings />;
+      case "new-appointment": return (
+        <NewAppointment
+          key={newApptPatientId}
+          patientId={newApptPatientId}
+          onNavigate={setActivePage}
+          onRegisterPatient={() => setActivePage("register-patient")}
+        />
+      );
+      case "register-patient": return (
+        <PatientRegistration
+          onNavigate={setActivePage}
+          onBookAppointment={(patientId) => goToNewAppt(patientId)}
+        />
+      );
       default: return <Dashboard />;
     }
   };
@@ -102,12 +68,11 @@ export default function App() {
     <div className="min-h-screen bg-slate-50" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       <Sidebar activePage={activePage} onNavigate={setActivePage} queriesBadge={queriesBadge} followupsBadge={followupsBadge} appointmentsBadge={appointmentsBadge} />
       <div className="ml-60 flex flex-col min-h-screen">
-        <Topbar activePage={activePage} onNewAppointment={() => { window.location.href = "/appointments/new"; }} />
+        <Topbar activePage={activePage} />
         <main className="flex-1 overflow-y-auto">
           {renderPage()}
         </main>
       </div>
-      {/* Modal removed — New Appointment uses /appointments/new full-screen */}
     </div>
   );
 }

@@ -7,7 +7,8 @@ import {
 export type Page =
   | "dashboard" | "appointments" | "queue" | "patients"
   | "prescriptions" | "medicines" | "lab" | "queries" | "followups"
-  | "reviews" | "analytics" | "settings";
+  | "reviews" | "analytics" | "settings"
+  | "new-appointment" | "register-patient";
 
 interface NavItem { icon: React.ReactNode; label: string; page: Page; badge?: number; badgeColor?: string; }
 
@@ -98,15 +99,15 @@ export function Sidebar({
       {/* Quick Actions */}
       <div className="px-3 pt-3 pb-1 space-y-1.5">
         <button
-          onClick={() => { window.location.href = "/appointments/new"; }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-semibold text-white bg-emerald-500 hover:bg-emerald-600 shadow-sm shadow-emerald-200 transition-all"
+          onClick={() => onNavigate("new-appointment")}
+          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all ${activePage === "new-appointment" ? "text-white bg-emerald-600 shadow-sm" : "text-white bg-emerald-500 hover:bg-emerald-600 shadow-sm shadow-emerald-200"}`}
         >
           <CalendarPlus size={15} />
           New Appointment
         </button>
         <button
-          onClick={() => { window.location.href = "/patients/new"; }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition-all"
+          onClick={() => onNavigate("register-patient")}
+          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all ${activePage === "register-patient" ? "text-violet-800 bg-violet-100 border border-violet-300" : "text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200"}`}
         >
           <UserPlus size={15} className="text-violet-500" />
           Register Patient

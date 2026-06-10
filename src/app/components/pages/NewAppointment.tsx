@@ -77,9 +77,17 @@ function SlotGrid({
   );
 }
 
-export function NewAppointment() {
+export function NewAppointment({
+  patientId: patientIdProp = "",
+  onNavigate,
+  onRegisterPatient,
+}: {
+  patientId?: string;
+  onNavigate?: (page: import("../Sidebar").Page) => void;
+  onRegisterPatient?: () => void;
+} = {}) {
   const params = new URLSearchParams(window.location.search);
-  const presetPatientId = params.get("patient_id") || "";
+  const presetPatientId = patientIdProp || params.get("patient_id") || "";
 
   const [step, setStep] = useState<Step>(presetPatientId ? "book-slot" : "select-patient");
   const [search, setSearch] = useState("");
@@ -184,26 +192,11 @@ export function NewAppointment() {
     setVisitType("New Visit");
     setResult(null);
     setBookError("");
-    window.history.replaceState({}, "", "/appointments/new");
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-      {/* Header */}
-      <header className="h-14 bg-white border-b border-slate-100 flex items-center px-7 gap-4 sticky top-0 z-40 shadow-sm">
-        <button
-          onClick={() => window.location.href = "/"}
-          className="flex items-center gap-2 text-[13px] text-slate-500 hover:text-slate-800 transition-colors"
-        >
-          <ArrowLeft size={16} /> Back to App
-        </button>
-        <div className="h-5 w-px bg-slate-200" />
-        <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 16 }} className="text-slate-800">
-          New Appointment
-        </span>
-      </header>
-
-      <div className="flex-1 flex items-start justify-center px-4 py-10">
+    <div className="flex flex-col" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+      <div className="flex items-start justify-center px-4 py-10">
         <div className="w-full max-w-lg">
 
           {/* ── STEP 1: Select Patient ── */}
@@ -260,7 +253,7 @@ export function NewAppointment() {
               <div className="border-t border-slate-100 pt-5 mt-2">
                 <p className="text-[12px] text-slate-400 mb-2">Patient not found?</p>
                 <button
-                  onClick={() => window.location.href = "/patients/new"}
+                  onClick={() => onRegisterPatient ? onRegisterPatient() : (window.location.href = "/patients/new")}
                   className="flex items-center gap-2 text-[13px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
                 >
                   + Register New Patient
@@ -442,7 +435,7 @@ export function NewAppointment() {
 
               <div className="space-y-3">
                 <button
-                  onClick={() => window.location.href = "/"}
+                  onClick={() => onNavigate ? onNavigate("appointments") : (window.location.href = "/")}
                   className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-[13px] font-semibold rounded-xl transition-colors"
                 >
                   <Calendar size={15} /> View Appointments

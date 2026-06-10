@@ -84,7 +84,13 @@ function ProgressBar({ step }: { step: Step }) {
   );
 }
 
-export function PatientRegistration() {
+export function PatientRegistration({
+  onNavigate,
+  onBookAppointment,
+}: {
+  onNavigate?: (page: import("../Sidebar").Page) => void;
+  onBookAppointment?: (patientId: string) => void;
+} = {}) {
   const [step, setStep] = useState<Step>("lookup");
   const [mobile, setMobile] = useState("");
   const [searching, setSearching] = useState(false);
@@ -163,22 +169,8 @@ export function PatientRegistration() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-      {/* Header */}
-      <header className="h-14 bg-white border-b border-slate-100 flex items-center px-7 gap-4 sticky top-0 z-40 shadow-sm">
-        <button
-          onClick={() => window.location.href = "/"}
-          className="flex items-center gap-2 text-[13px] text-slate-500 hover:text-slate-800 transition-colors"
-        >
-          <ArrowLeft size={16} /> Back to App
-        </button>
-        <div className="h-5 w-px bg-slate-200" />
-        <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 16 }} className="text-slate-800">
-          Register Patient
-        </span>
-      </header>
-
-      <div className="flex-1 flex items-start justify-center px-4 py-10">
+    <div className="flex flex-col" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+      <div className="flex items-start justify-center px-4 py-10">
         <div className="w-full max-w-lg">
           <ProgressBar step={step} />
 
@@ -410,7 +402,7 @@ export function PatientRegistration() {
 
               <div className="space-y-3">
                 <button
-                  onClick={() => window.location.href = `/appointments/new?patient_id=${registeredPatient.id}`}
+                  onClick={() => onBookAppointment ? onBookAppointment(registeredPatient.id) : (window.location.href = `/appointments/new?patient_id=${registeredPatient.id}`)}
                   className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-[13px] font-semibold rounded-xl shadow-sm shadow-emerald-200 transition-colors"
                 >
                   <Calendar size={15} /> Book Appointment for this patient
@@ -422,7 +414,7 @@ export function PatientRegistration() {
                   + Register Another Patient
                 </button>
                 <button
-                  onClick={() => window.location.href = "/"}
+                  onClick={() => onNavigate ? onNavigate("patients") : (window.location.href = "/")}
                   className="w-full py-2 text-slate-400 text-[12px] hover:text-slate-600 transition-colors"
                 >
                   ← Back to Patients
