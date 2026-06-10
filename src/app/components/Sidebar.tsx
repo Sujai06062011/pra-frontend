@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, CalendarDays, Users, Hash, Pill, FlaskConical,
   MessageCircle, Phone, Star, BarChart3, Settings, ChevronRight,
-  Stethoscope, LogOut, Tablets
+  Stethoscope, LogOut, Tablets, UserPlus, CalendarPlus
 } from "lucide-react";
 
 export type Page =
@@ -135,6 +135,25 @@ export function Sidebar({
           </div>
         ))}
       </nav>
+
+      {/* Quick Actions */}
+      <div className="px-3 pb-3 space-y-1">
+        <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-2 mb-2">Quick Actions</div>
+        <button
+          onClick={() => { window.location.href = "/appointments/new"; }}
+          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all"
+        >
+          <CalendarPlus size={15} className="text-emerald-500" />
+          New Appointment
+        </button>
+        <button
+          onClick={() => { window.location.href = "/patients/new"; }}
+          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 transition-all"
+        >
+          <UserPlus size={15} className="text-violet-500" />
+          Register Patient
+        </button>
+      </div>
 
       {/* Footer */}
       <div className="px-4 py-4 border-t border-slate-100">
