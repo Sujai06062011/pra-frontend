@@ -244,6 +244,8 @@ export const api = {
       req<Patient[]>(`/patients/lookup?mobile=${encodeURIComponent(mobile)}`),
     register: (data: PatientRegistrationPayload) =>
       req<Patient>("/patients/register", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<Pick<Patient, "name" | "mobile" | "age" | "gender" | "language"> & { date_of_birth?: string; email?: string; address?: string; [key: string]: unknown }>) =>
+      req<Patient>(`/patients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   },
 
   appointments: {
