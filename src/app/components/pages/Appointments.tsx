@@ -128,12 +128,6 @@ export function Appointments({ onNewAppointment }: { onNewAppointment?: () => vo
             <Filter size={14} /> Filter <ChevronDown size={13} />
           </button>
         </div>
-        <button
-          onClick={onNewAppointment}
-          className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-[13px] font-semibold px-4 py-2 rounded-xl shadow-sm shadow-emerald-200 transition-colors"
-        >
-          <Plus size={15} /> New Appointment
-        </button>
       </div>
 
       {/* Date tabs + Status filter row */}

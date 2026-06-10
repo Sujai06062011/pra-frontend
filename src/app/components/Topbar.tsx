@@ -58,14 +58,6 @@ export function Topbar({ activePage, onNewAppointment }: { activePage: Page; onN
         <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full border border-white"></span>
       </button>
 
-      {/* CTA */}
-      <button
-        onClick={onNewAppointment}
-        className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-[13px] font-semibold px-4 py-2 rounded-lg shadow-sm shadow-emerald-200 transition-colors"
-      >
-        <Plus size={15} />
-        New Appointment
-      </button>
     </header>
   );
 }
