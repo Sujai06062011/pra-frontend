@@ -52,7 +52,7 @@ type DateTab = "today" | "week" | "all";
 type StatusFilter = "all" | DerivedStatus;
 
 // ── main ─────────────────────────────────────────────────
-export function Appointments({ onNewAppointment }: { onNewAppointment?: () => void }) {
+export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointment?: () => void; onPrescribe?: (patientId: string, appointmentId: string) => void }) {
   const [search, setSearch]       = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [dateTab, setDateTab]     = useState<DateTab>("today");
@@ -245,8 +245,8 @@ export function Appointments({ onNewAppointment }: { onNewAppointment?: () => vo
                         {apt.derivedStatus === "in-progress" && (
                           <button
                             onClick={() => {
-                              const params = new URLSearchParams({ patient_id: apt.patient_id, appointment_id: apt.id });
-                              window.location.href = `/prescriptions/new?${params}`;
+                              if (onPrescribe) { onPrescribe(apt.patient_id, apt.id); }
+                              else { const params = new URLSearchParams({ patient_id: apt.patient_id, appointment_id: apt.id }); window.location.href = `/prescriptions/new?${params}`; }
                             }}
                             className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-all"
                           >

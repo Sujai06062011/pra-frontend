@@ -573,7 +573,7 @@ export function PrescriptionWriter({ patientId: patientIdProp, appointmentId: ap
           {/* Bottom action bar */}
           <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
             <button
-              onClick={() => window.history.back()}
+              onClick={() => { if (onNavigate) onNavigate("dashboard"); else window.location.href = "/"; }}
               className="px-4 py-2.5 border border-slate-200 rounded-xl text-[13px] text-slate-500 hover:bg-slate-50 transition-colors"
             >
               Cancel

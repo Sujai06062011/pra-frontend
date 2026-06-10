@@ -7,7 +7,7 @@ const avatarColors = [
   "from-cyan-400 to-sky-500",
 ];
 
-export function Queue() {
+export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appointmentId: string) => void } = {}) {
   const { data, loading, error, refetch, callNext, callPrev } = useQueue();
   const current = data.current_token;
   // In-progress = next token after current (or token 1 when queue hasn't started)
@@ -133,8 +133,8 @@ export function Queue() {
                       </span>
                       <button
                         onClick={() => {
-                          const params = new URLSearchParams({ patient_id: p.patient_id, appointment_id: p.id });
-                          window.location.href = `/prescriptions/new?${params}`;
+                          if (onPrescribe) { onPrescribe(p.patient_id, p.id); }
+                          else { const params = new URLSearchParams({ patient_id: p.patient_id, appointment_id: p.id }); window.location.href = `/prescriptions/new?${params}`; }
                         }}
                         className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-500 text-white hover:bg-emerald-600 transition-colors shadow-sm"
                       >

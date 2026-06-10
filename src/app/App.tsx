@@ -38,8 +38,8 @@ export default function App() {
   const renderPage = () => {
     switch (activePage) {
       case "dashboard": return <Dashboard onNavigate={setActivePage} />;
-      case "appointments": return <Appointments />;
-      case "queue": return <Queue />;
+      case "appointments": return <Appointments onPrescribe={(patientId, appointmentId) => { setRxParams({ patientId, appointmentId }); setActivePage("new-prescription"); }} />;
+      case "queue": return <Queue onPrescribe={(patientId, appointmentId) => { setRxParams({ patientId, appointmentId }); setActivePage("new-prescription"); }} />;
       case "patients": return <Patients />;
       case "prescriptions": return (
         <Prescriptions
