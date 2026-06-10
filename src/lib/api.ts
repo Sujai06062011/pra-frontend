@@ -246,6 +246,8 @@ export const api = {
       req<Patient>("/patients/register", { method: "POST", body: JSON.stringify(data) }),
     update: (id: string, data: Partial<Pick<Patient, "name" | "mobile" | "age" | "gender" | "language"> & { date_of_birth?: string; email?: string; address?: string; [key: string]: unknown }>) =>
       req<Patient>(`/patients/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    search: (mobile: string) =>
+      req<{ patient_id: string; name: string; age?: number; mobile: string; last_visit_date?: string }>(`/patients/search?mobile=${encodeURIComponent(mobile)}`),
   },
 
   appointments: {
@@ -313,6 +315,23 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+    createNew: (data: {
+      doctor_id: string;
+      patient_id?: string | null;
+      visit_id?: string | null;
+      appointment_id?: string | null;
+      is_walkin: boolean;
+      walkin_name?: string | null;
+      walkin_age?: number | null;
+      chief_complaint: string;
+      dietary_instructions: string;
+      precautions: string;
+      general_notes: string;
+      medicines: PrescriptionWritePayload["medicines"];
+    }) =>
+      req<{ prescription_id: string }>("/prescriptions", { method: "POST", body: JSON.stringify(data) }),
+    sendWhatsapp: (prescriptionId: string) =>
+      req<{ sent: boolean; mobile?: string; error?: string }>(`/prescriptions/${prescriptionId}/send-whatsapp`, { method: "POST" }),
     getDetail: (prescriptionId: string) =>
       req<Prescription & { visits?: { id: string; chief_complaint: string; diagnosis: string; notes: string } }>(`/prescriptions/${prescriptionId}/detail`),
     update: (prescriptionId: string, data: {
