@@ -83,7 +83,7 @@ export default function App() {
   const renderPage = () => {
     switch (activePage) {
       case "dashboard": return <Dashboard onNavigate={setActivePage} />;
-      case "appointments": return <Appointments onNewAppointment={() => setShowModal(true)} />;
+      case "appointments": return <Appointments onNewAppointment={() => { window.location.href = "/appointments/new"; }} />;
       case "queue": return <Queue />;
       case "patients": return <Patients />;
       case "prescriptions": return <Prescriptions />;
@@ -102,12 +102,12 @@ export default function App() {
     <div className="min-h-screen bg-slate-50" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       <Sidebar activePage={activePage} onNavigate={setActivePage} queriesBadge={queriesBadge} followupsBadge={followupsBadge} appointmentsBadge={appointmentsBadge} />
       <div className="ml-60 flex flex-col min-h-screen">
-        <Topbar activePage={activePage} onNewAppointment={() => setShowModal(true)} />
+        <Topbar activePage={activePage} onNewAppointment={() => { window.location.href = "/appointments/new"; }} />
         <main className="flex-1 overflow-y-auto">
           {renderPage()}
         </main>
       </div>
-      {showModal && <NewAppointmentModal onClose={() => setShowModal(false)} />}
+      {/* Modal removed — New Appointment uses /appointments/new full-screen */}
     </div>
   );
 }

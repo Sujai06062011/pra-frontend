@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Search, Filter, ChevronDown, Phone, Calendar, FileText, User, RefreshCw } from "lucide-react";
+import { Search, Filter, ChevronDown, Phone, Calendar, FileText, User, RefreshCw, Plus } from "lucide-react";
 import { usePatients } from "../../../hooks/usePRAData";
 import { PatientInfoPanel } from "../shared/PatientInfoPanel";
 
@@ -48,6 +48,12 @@ export function Patients() {
         </div>
         <button className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-xl text-[13px] text-slate-600 bg-white hover:bg-slate-50 transition-colors">
           <Filter size={14} /> Filter <ChevronDown size={13} />
+        </button>
+        <button
+          onClick={() => { window.location.href = "/patients/new"; }}
+          className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-[13px] font-semibold rounded-xl shadow-sm shadow-emerald-200 transition-colors"
+        >
+          <Plus size={14} /> Register Patient
         </button>
         <div className="ml-auto text-[13px] text-slate-500">
           <span className="font-semibold text-slate-700">{loading ? "…" : patients.length}</span> patients

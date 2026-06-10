@@ -151,6 +151,41 @@ export interface ClinicMedicine {
   is_active: boolean;
 }
 
+export interface PatientRegistrationPayload {
+  name: string;
+  mobile: string;
+  date_of_birth: string;
+  gender: string;
+  language: string;
+  email?: string;
+  city?: string;
+  family_head_mobile?: string;
+  doctor_id: string;
+}
+
+export interface SlotInfo {
+  time: string;
+  display: string;
+  booked_count: number;
+  max: number;
+  available: boolean;
+}
+
+export interface BookAppointmentPayload {
+  patient_id: string;
+  doctor_id: string;
+  appointment_date: string;
+  appointment_time: string;
+  visit_type: string;
+}
+
+export interface BookingResult {
+  appointment_id: string;
+  token_number: number;
+  patient_name: string;
+  whatsapp_sent: boolean;
+}
+
 export interface PrescriptionWritePayload {
   patient_id: string;
   doctor_id?: string;
@@ -205,6 +240,10 @@ export const api = {
     get: (id: string) => req<Patient>(`/patients/${id}`),
     getFamilyMembers: (headMobile: string) =>
       req<Patient[]>(`/patients/family/${headMobile}`),
+    lookup: (mobile: string) =>
+      req<Patient[]>(`/patients/lookup?mobile=${encodeURIComponent(mobile)}`),
+    register: (data: PatientRegistrationPayload) =>
+      req<Patient>("/patients/register", { method: "POST", body: JSON.stringify(data) }),
   },
 
   appointments: {
@@ -223,6 +262,12 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify({ status }),
       }),
+    slots: (doctorId: string, date: string) =>
+      req<SlotInfo[]>(`/appointments/slots?doctor_id=${doctorId}&date=${date}`),
+    nextToken: (doctorId: string, date: string) =>
+      req<{ token: number }>(`/appointments/next-token?doctor_id=${doctorId}&date=${date}`),
+    book: (data: BookAppointmentPayload) =>
+      req<BookingResult>("/appointments/book", { method: "POST", body: JSON.stringify(data) }),
   },
 
   queue: {
