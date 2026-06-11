@@ -136,7 +136,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
   }));
 
   const tabLabel = activeTab === "today" ? "Today" : activeTab === "week" ? "This Week" : "This Month";
-  const tabCount = tabAppts.length;
+  const tabCount = tabAppts.filter(a => a.status !== "Cancelled").length;
 
   return (
     <div className="p-7 space-y-6">
@@ -214,7 +214,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
             <div className="text-center">
               <div className="text-[10px] uppercase tracking-widest text-slate-400 mb-1">Now Serving</div>
               <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 44, lineHeight: 1, color: "#10b981" }} className="drop-shadow-sm">
-                {statsLoading ? "—" : ((stats.current_token ?? 0) + 1 <= (stats.today_appointments ?? 0) ? (stats.current_token ?? 0) + 1 : stats.current_token || "—")}
+                {statsLoading ? "—" : (stats.current_token || "—")}
               </div>
             </div>
             <div className="w-px h-14 bg-slate-100" />
@@ -338,16 +338,17 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
                 const currentToken = stats.current_token ?? 0;
                 const t = apt.token_number ?? 0;
                 const mappedStatus: string =
-                  apt.status === "Cancelled" ? "cancelled" :
-                  t <= currentToken           ? "done" :
-                  t === currentToken + 1      ? "in-progress" :
-                                                "waiting";
+                  apt.status === "Cancelled"             ? "cancelled" :
+                  currentToken > 0 && t === currentToken ? "in-progress" :
+                  t < currentToken                       ? "done" :
+                                                           "waiting";
                 const s = statusConfig[mappedStatus as keyof typeof statusConfig];
                 const color = avatarColors[idx % avatarColors.length];
+                const isCancelled = mappedStatus === "cancelled";
                 return (
-                  <tr key={apt.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors cursor-pointer group">
+                  <tr key={apt.id} className={`border-b border-slate-50 transition-colors cursor-pointer group ${isCancelled ? "opacity-60" : "hover:bg-slate-50/60"}`}>
                     <td className="px-5 py-3.5">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold ${mappedStatus === "in-progress" ? "bg-emerald-500 text-white shadow-sm" : "bg-slate-100 text-slate-600"}`}>
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold ${isCancelled ? "bg-slate-200 text-slate-400" : mappedStatus === "in-progress" ? "bg-emerald-500 text-white shadow-sm" : "bg-slate-100 text-slate-600"}`}>
                         {apt.token_number ?? "—"}
                       </div>
                     </td>
@@ -357,7 +358,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
                           {patientName[0]}
                         </div>
                         <div>
-                          <div className="text-[13px] font-medium text-slate-800">{patientName}</div>
+                          <div className={`text-[13px] font-medium text-slate-800 ${isCancelled ? "line-through text-slate-400" : ""}`}>{patientName}</div>
                           {patientAge && <div className="text-[11px] text-slate-400">{patientAge} yrs</div>}
                         </div>
                       </div>
@@ -371,22 +372,24 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="flex gap-2">
-                        <button className="text-[11px] font-semibold px-3 py-1 rounded-lg border border-slate-200 text-slate-500 hover:border-emerald-300 hover:text-emerald-600 transition-all">
-                          View
-                        </button>
-                        {mappedStatus === "in-progress" && (
-                          <button
-                            onClick={() => {
-                              const params = new URLSearchParams({ patient_id: apt.patient_id, appointment_id: apt.id });
-                              window.location.href = `/prescriptions/new?${params}`;
-                            }}
-                            className="text-[11px] font-semibold px-3 py-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-all shadow-sm"
-                          >
-                            ✍️ Prescribe
+                      {!isCancelled && (
+                        <div className="flex gap-2">
+                          <button className="text-[11px] font-semibold px-3 py-1 rounded-lg border border-slate-200 text-slate-500 hover:border-emerald-300 hover:text-emerald-600 transition-all">
+                            View
                           </button>
-                        )}
-                      </div>
+                          {mappedStatus === "in-progress" && (
+                            <button
+                              onClick={() => {
+                                const params = new URLSearchParams({ patient_id: apt.patient_id, appointment_id: apt.id });
+                                window.location.href = `/prescriptions/new?${params}`;
+                              }}
+                              className="text-[11px] font-semibold px-3 py-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-all shadow-sm"
+                            >
+                              ✍️ Prescribe
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );

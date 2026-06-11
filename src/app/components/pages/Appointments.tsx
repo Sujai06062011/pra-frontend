@@ -36,8 +36,9 @@ type DerivedStatus = "done" | "in-progress" | "waiting" | "cancelled";
 function deriveStatus(apt: Appointment, currentToken: number): DerivedStatus {
   if (apt.status === "Cancelled") return "cancelled";
   const t = apt.token_number ?? 0;
-  if (t <= currentToken) return "done";
-  if (t === currentToken + 1) return "in-progress";
+  // currentToken IS the token being served (0 = queue not started)
+  if (currentToken > 0 && t === currentToken) return "in-progress";
+  if (t < currentToken) return "done";
   return "waiting";
 }
 
@@ -200,20 +201,22 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
                   ? new Date(apt.appointment_date + "T00:00:00").toLocaleDateString("en-IN", { dateStyle: "medium" })
                   : "—";
 
+                const isCancelled = apt.derivedStatus === "cancelled";
+
                 return (
-                  <tr key={apt.id} className="border-b border-slate-50 hover:bg-emerald-50/30 transition-colors cursor-pointer">
+                  <tr key={apt.id} className={`border-b border-slate-50 transition-colors cursor-pointer ${isCancelled ? "bg-rose-50" : "hover:bg-emerald-50/30"}`}>
                     <td className="px-5 py-3.5">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold ${apt.derivedStatus === "in-progress" ? "bg-emerald-500 text-white shadow-sm" : "bg-slate-100 text-slate-500"}`}>
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold ${isCancelled ? "bg-slate-200 text-slate-400" : apt.derivedStatus === "in-progress" ? "bg-emerald-500 text-white shadow-sm" : "bg-slate-100 text-slate-500"}`}>
                         {apt.token_number ?? "—"}
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2.5">
-                        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center text-white text-[12px] font-bold shadow-sm`}>
+                        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center text-white text-[12px] font-bold shadow-sm ${isCancelled ? "opacity-50" : ""}`}>
                           {patientName[0]}
                         </div>
                         <div>
-                          <div className="text-[13px] font-medium text-slate-800">{patientName}</div>
+                          <div className={`text-[13px] font-medium text-slate-800 ${isCancelled ? "opacity-60 line-through" : ""}`}>{patientName}</div>
                           <div className="text-[11px] text-slate-400">
                             {apt.patients?.age ? `${apt.patients.age} yrs` : ""}
                             {apt.patients?.age && apt.patients?.gender ? " · " : ""}
@@ -238,22 +241,24 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="flex gap-2">
-                        <button className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-slate-200 text-slate-500 hover:border-emerald-300 hover:text-emerald-600 transition-all">
-                          View
-                        </button>
-                        {apt.derivedStatus === "in-progress" && (
-                          <button
-                            onClick={() => {
-                              if (onPrescribe) { onPrescribe(apt.patient_id, apt.id); }
-                              else { const params = new URLSearchParams({ patient_id: apt.patient_id, appointment_id: apt.id }); window.location.href = `/prescriptions/new?${params}`; }
-                            }}
-                            className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-all"
-                          >
-                            Prescribe
+                      {!isCancelled && (
+                        <div className="flex gap-2">
+                          <button className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-slate-200 text-slate-500 hover:border-emerald-300 hover:text-emerald-600 transition-all">
+                            View
                           </button>
-                        )}
-                      </div>
+                          {apt.derivedStatus === "in-progress" && (
+                            <button
+                              onClick={() => {
+                                if (onPrescribe) { onPrescribe(apt.patient_id, apt.id); }
+                                else { const params = new URLSearchParams({ patient_id: apt.patient_id, appointment_id: apt.id }); window.location.href = `/prescriptions/new?${params}`; }
+                              }}
+                              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-all"
+                            >
+                              Prescribe
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
