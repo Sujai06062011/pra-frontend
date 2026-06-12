@@ -128,7 +128,7 @@ export function NewAppointment({
       setSearching(true);
       try {
         const res = await api.patients.list(DOCTOR_ID, search);
-        setSearchResults(res.slice(0, 8));
+        setSearchResults(res);
       } catch { setSearchResults([]); }
       finally { setSearching(false); }
     }, 300);
