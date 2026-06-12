@@ -230,7 +230,11 @@ async function req<T>(path: string, options?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
-  if (!res.ok) throw new Error(`API error ${res.status}: ${path}`);
+  if (!res.ok) {
+    let detail = "";
+    try { detail = (await res.json())?.detail ?? ""; } catch { /* non-JSON error body */ }
+    throw new Error(detail || `API error ${res.status}: ${path}`);
+  }
   return res.json();
 }
 
