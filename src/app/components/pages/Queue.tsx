@@ -41,6 +41,7 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
     targetSession: "morning" | "evening";
   } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState("");
 
   const currentPatient = getCurrentAppointment(appointments);
   const firstPatient = getFirstAppointment(appointments);
@@ -54,37 +55,40 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
   // ── status transitions (uses existing endpoints) ────────
   // PATCH /appointments/{id}/status + POST /queue/set-token via setToken().
   // DB statuses: "Completed" = Done, "Confirmed" = Waiting.
-  const advanceToAppointment = async (target: Appointment, previous: Appointment | null) => {
+  // The most failure-prone write runs FIRST so a failure can't half-advance
+  // the queue; any error is surfaced and the list re-synced.
+  const runTransition = async (steps: () => Promise<void>) => {
     setBusy(true);
+    setActionError("");
     try {
-      if (previous) await api.appointments.updateStatus(previous.id, "Completed");
+      await steps();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Queue update failed");
+      refetch(); // re-sync after partial failure
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const advanceToAppointment = (target: Appointment, previous: Appointment | null) =>
+    runTransition(async () => {
       await api.appointments.updateStatus(target.id, "In Progress");
+      if (previous) await api.appointments.updateStatus(previous.id, "Completed");
       await setToken(target.token_number ?? 0); // syncs tokens table + refetches
-    } finally {
-      setBusy(false);
-    }
-  };
+    });
 
-  const revertToAppointment = async (current: Appointment, prev: Appointment) => {
-    setBusy(true);
-    try {
+  const revertToAppointment = (current: Appointment, prev: Appointment) =>
+    runTransition(async () => {
+      await api.appointments.updateStatus(prev.id, "In Progress"); // Done → In Progress
       await api.appointments.updateStatus(current.id, "Confirmed"); // back to Waiting
-      await api.appointments.updateStatus(prev.id, "In Progress");  // Done → In Progress
       await setToken(prev.token_number ?? 0);
-    } finally {
-      setBusy(false);
-    }
-  };
+    });
 
-  const finishLastPatient = async (current: Appointment) => {
-    setBusy(true);
-    try {
+  const finishLastPatient = (current: Appointment) =>
+    runTransition(async () => {
       await api.appointments.updateStatus(current.id, "Completed");
       await setToken(0);
-    } finally {
-      setBusy(false);
-    }
-  };
+    });
 
   // ── Next / Prev handlers ─────────────────────────────────
   const handleNext = async () => {
@@ -164,6 +168,13 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
           <button onClick={refetch} className="flex items-center gap-1 text-[12px] font-semibold text-rose-600">
             <RefreshCw size={13} /> Retry
           </button>
+        </div>
+      )}
+
+      {actionError && (
+        <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <span className="text-[13px] text-amber-800 flex-1">Queue update failed: {actionError}</span>
+          <button onClick={() => setActionError("")} className="text-[12px] font-semibold text-amber-700">Dismiss</button>
         </div>
       )}
 
