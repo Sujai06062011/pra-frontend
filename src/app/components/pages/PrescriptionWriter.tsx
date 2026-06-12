@@ -4,7 +4,7 @@ import {
   Stethoscope, Apple, Pill, FileText, User, Calendar, Hash, Phone, Globe,
   Search, UserX, UserCheck, ChevronRight,
 } from "lucide-react";
-import { api, type Patient } from "../../../lib/api";
+import { api, type Patient, type VisitVitals } from "../../../lib/api";
 import { VitalsSection } from "../shared/VitalsSection";
 import { MedicineRow, type MedicineFormRow } from "../prescription/MedicineRow";
 import {
@@ -341,6 +341,7 @@ export function PrescriptionWriter({
     precautions: "",
   });
   const [medicines, setMedicines] = useState<MedicineFormRow[]>([makeEmptyMed()]);
+  const [vitalsForm, setVitalsForm] = useState<VisitVitals>({});
 
   // Save state
   const [saving, setSaving] = useState(false);
@@ -424,6 +425,25 @@ export function PrescriptionWriter({
       .finally(() => { creatingVisitRef.current = false; });
   }, [isEditMode, isWalkin, effectivePatientIdForVisit, visitId, doctorId, appointmentId]);
 
+  // Load existing vitals for the visit (edit mode / reload)
+  useEffect(() => {
+    if (!visitId) return;
+    api.visits.getVitals(visitId)
+      .then(d => { if (d.vitals) setVitalsForm(d.vitals); })
+      .catch(() => {});
+  }, [visitId]);
+
+  const updateVital = (field: keyof VisitVitals, value: string) =>
+    setVitalsForm(prev => ({ ...prev, [field]: value }));
+
+  const VITAL_VALUE_KEYS: (keyof VisitVitals)[] = [
+    "temperature_f", "weight_kg", "height_cm", "spo2_percent",
+    "bp_systolic", "bp_diastolic", "pulse_bpm", "key_findings",
+  ];
+  const hasAnyVital = VITAL_VALUE_KEYS.some(
+    k => vitalsForm[k] !== undefined && vitalsForm[k] !== null && vitalsForm[k] !== ""
+  );
+
   // Medicine handlers
   const addMedicine = () => setMedicines(prev => [...prev, makeEmptyMed()]);
   const updateMedicine = useCallback((idx: number, updated: MedicineFormRow) => {
@@ -474,6 +494,15 @@ export function PrescriptionWriter({
       morning: m.morning, afternoon: m.afternoon, evening: m.evening, night: m.night,
       before_food: m.before_food, instructions: m.instructions, sort_order: i + 1,
     }));
+
+    // Vitals save together with the prescription (best-effort, non-blocking)
+    if (visitId && hasAnyVital) {
+      try {
+        await api.visits.saveVitals(visitId, { ...vitalsForm, recorded_by_role: "doctor" });
+      } catch (e) {
+        console.error("Vitals save failed", e);
+      }
+    }
 
     try {
       if (isEditMode) {
@@ -686,11 +715,11 @@ export function PrescriptionWriter({
                 {errors.chief_complaint && <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={11} /> {errors.chief_complaint}</p>}
               </div>
 
-              {/* Vitals & Examination — self-contained, saves independently */}
+              {/* Vitals & Examination — always editable, saved with the prescription */}
               {visitId && !isWalkin && (
                 <VitalsSection
-                  visitId={visitId}
-                  patientId={effectivePatientIdForVisit}
+                  vitals={vitalsForm}
+                  onChange={updateVital}
                   editable={true}
                 />
               )}
