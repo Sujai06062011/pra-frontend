@@ -353,8 +353,17 @@ export function PrescriptionWriter({
     if (isEditMode) {
       api.prescriptions.getDetail(prescriptionId).then(pres => {
         if (!pres) { setLoadingPatient(false); return; }
-        if (pres.patients) setPatient(pres.patients as unknown as Patient);
-        else if (pres.patient_id) api.patients.get(pres.patient_id).then(setPatient).catch(() => {});
+        // Detect walk-in: no patient_id but has walkin_name
+        if (!pres.patient_id && (pres as any).walkin_name) {
+          setIsWalkin(true);
+          setWalkinName((pres as any).walkin_name || "");
+          setWalkinAge((pres as any).walkin_age || "");
+          setShowLookup(false);
+          setLoadingPatient(false);
+        } else {
+          if (pres.patients) setPatient(pres.patients as unknown as Patient);
+          else if (pres.patient_id) api.patients.get(pres.patient_id).then(setPatient).catch(() => {});
+        }
         const v = (pres as any).visits;
         if (v) {
           setVisitId(v.id || "");
@@ -475,6 +484,7 @@ export function PrescriptionWriter({
         walkin_name:          isWalkin ? walkinName : null,
         walkin_age:           isWalkin && walkinAge !== "" ? Number(walkinAge) : null,
         chief_complaint:      form.chief_complaint,
+        diagnosis:            form.diagnosis,
         dietary_instructions: form.dietary_instructions,
         precautions:          form.precautions,
         general_notes:        form.notes,

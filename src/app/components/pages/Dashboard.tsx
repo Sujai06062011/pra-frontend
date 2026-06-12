@@ -322,7 +322,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
           <table className="w-full">
             <thead>
               <tr className="bg-slate-50/60">
-                {["Token", "Patient", "Date", "Status", "Action"].map((h) => (
+                {["Token", "Patient", "Date", "Time", "Status", "Action"].map((h) => (
                   <th key={h} className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-slate-400 px-5 py-3 border-b border-slate-100">
                     {h}
                   </th>
@@ -331,14 +331,18 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
             </thead>
             <tbody>
               {(tabAppts.length === 0) ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-[13px] text-slate-400">No appointments for this period</td></tr>
+                <tr><td colSpan={6} className="px-5 py-8 text-center text-[13px] text-slate-400">No appointments for this period</td></tr>
               ) : tabAppts.slice(0, 8).map((apt, idx) => {
                 const patientName = apt.patients?.name || "Unknown";
                 const patientAge = apt.patients?.age;
                 const currentToken = stats.current_token ?? 0;
                 const t = apt.token_number ?? 0;
+                // Prefer the API's time-order queue_status
                 const mappedStatus: string =
-                  apt.status === "Cancelled"             ? "cancelled" :
+                  apt.queue_status === "Cancelled" || apt.status === "Cancelled" ? "cancelled" :
+                  apt.queue_status === "In Progress" ? "in-progress" :
+                  apt.queue_status === "Done"        ? "done" :
+                  apt.queue_status === "Waiting"     ? "waiting" :
                   currentToken > 0 && t === currentToken ? "in-progress" :
                   t < currentToken                       ? "done" :
                                                            "waiting";
@@ -365,6 +369,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
                     </td>
                     <td className="px-5 py-3.5 text-[12px] text-slate-400">
                       {apt.appointment_date ? new Date(apt.appointment_date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—"}
+                    </td>
+                    <td className="px-5 py-3.5 text-[12px] font-medium text-slate-500">
+                      {(() => { const tt = apt.appointment_time; if (!tt) return "—"; const h = parseInt(tt.slice(0,2),10); const h12 = h % 12 || 12; return `${h12}:${tt.slice(3,5)} ${h >= 12 ? "PM" : "AM"}`; })()}
                     </td>
                     <td className="px-5 py-3.5">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${s.cls}`}>

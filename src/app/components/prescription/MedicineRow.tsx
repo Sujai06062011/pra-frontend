@@ -36,7 +36,9 @@ const TIMING_BUTTONS = [
 export function MedicineRow({ index, medicine, onChange, onRemove, error }: Props) {
   const [query, setQuery]             = useState(medicine.medicine_name);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [manualDosage, setManualDosage] = useState(false);
+  const [manualDosage, setManualDosage] = useState(
+    !!medicine.dosage && !ALL_DOSAGE_OPTIONS.includes(medicine.dosage)
+  );
   const [dosageOptions, setDosageOptions] = useState<string[]>([]);
   const { results, loading, search, clear } = useMedicineSearch();
   const inputRef = useRef<HTMLInputElement>(null);

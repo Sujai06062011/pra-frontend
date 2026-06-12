@@ -79,7 +79,8 @@ export function Prescriptions({ onNewPrescription, onEditPrescription }: Prescri
       ) : (
       <div className="grid grid-cols-2 gap-4">
         {withDays.map((p, idx) => {
-          const name = p.patients?.name || "Unknown";
+          const isWalkin = !p.patient_id;
+          const name = p.patients?.name || p.walkin_name || (isWalkin ? "Walk-in" : "Unknown");
           const color = avatarColors[idx % avatarColors.length];
           const meds = p.prescription_medicines ?? [];
           const dateStr = p.prescription_date
@@ -99,6 +100,11 @@ export function Prescriptions({ onNewPrescription, onEditPrescription }: Prescri
                         <Hash size={9} />{p.patients.patient_code}
                       </span>
                     )}
+                    {isWalkin && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                        Walk-in
+                      </span>
+                    )}
                     <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
                       <CheckCircle2 size={10} /> Active
                     </span>
@@ -106,7 +112,7 @@ export function Prescriptions({ onNewPrescription, onEditPrescription }: Prescri
                   <div className="text-[11px] text-slate-400 mt-0.5">Prescribed: {dateStr}</div>
                 </div>
                 <button
-                  onClick={() => onEditPrescription ? onEditPrescription(p.patient_id, p.id) : (() => { const params = new URLSearchParams({ patient_id: p.patient_id, prescription_id: p.id }); window.location.href = `/prescriptions/new?${params}`; })()}
+                  onClick={() => onEditPrescription ? onEditPrescription(p.patient_id ?? "", p.id) : (() => { const params = new URLSearchParams({ prescription_id: p.id }); if (p.patient_id) params.set("patient_id", p.patient_id); window.location.href = `/prescriptions/new?${params}`; })()}
                   className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50 transition-all flex-shrink-0"
                 >
                   <Eye size={12} /> View

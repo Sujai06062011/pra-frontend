@@ -9,36 +9,39 @@ const avatarColors = [
   "from-cyan-400 to-sky-500",
 ];
 
-// ── skip-cancelled helpers ────────────────────────────────
-// current_token IS the token being served (0 = queue not started yet)
+// ── queue navigation (slot TIME order) ───────────────────
+// current_token identifies the serving appointment; Next/Prev walk the
+// non-cancelled appointments sorted by appointment_time, not token number.
+const byTime = (a: Appointment, b: Appointment) =>
+  (a.appointment_time ?? "").localeCompare(b.appointment_time ?? "");
+
+function activeByTime(appointments: Appointment[]): Appointment[] {
+  return appointments.filter(t => t.status !== "Cancelled" && t.token_number).sort(byTime);
+}
+
 function getNextToken(current: number, appointments: Appointment[]): { token: number; skipped: Appointment[] } | null {
-  const active = appointments
-    .filter(t => t.status !== "Cancelled")
-    .sort((a, b) => (a.token_number ?? 0) - (b.token_number ?? 0));
-  const next = active.find(t => (t.token_number ?? 0) > current);
+  const active = activeByTime(appointments);
+  if (!active.length) return null;
+  const idx = current > 0 ? active.findIndex(t => t.token_number === current) : -1;
+  const next = active[idx + 1];
   if (!next) return null;
-  const skipped = appointments.filter(
-    t => t.status === "Cancelled" &&
-    (t.token_number ?? 0) > current &&
-    (t.token_number ?? 0) < (next.token_number ?? 0)
-  );
-  return { token: next.token_number ?? 0, skipped };
+  return { token: next.token_number ?? 0, skipped: [] };
 }
 
 function getPrevToken(current: number, appointments: Appointment[]): { token: number; skipped: Appointment[] } | null {
   if (current <= 0) return null;
-  const active = appointments
-    .filter(t => t.status !== "Cancelled")
-    .sort((a, b) => (b.token_number ?? 0) - (a.token_number ?? 0));
-  const prev = active.find(t => (t.token_number ?? 0) < current);
-  const prevToken = prev?.token_number ?? 0; // nothing before → back to "not started"
-  const skipped = appointments.filter(
-    t => t.status === "Cancelled" &&
-    (t.token_number ?? 0) < current &&
-    (t.token_number ?? 0) > prevToken
-  );
-  return { token: prevToken, skipped };
+  const active = activeByTime(appointments);
+  const idx = active.findIndex(t => t.token_number === current);
+  if (idx <= 0) return { token: 0, skipped: [] }; // back to "not started"
+  return { token: active[idx - 1].token_number ?? 0, skipped: [] };
 }
+
+const fmtTime = (t?: string) => {
+  if (!t) return "";
+  const h = parseInt(t.slice(0, 2), 10);
+  const h12 = h % 12 || 12;
+  return `${h12}:${t.slice(3, 5)} ${h >= 12 ? "PM" : "AM"}`;
+};
 
 // ── toast ─────────────────────────────────────────────────
 function Toast({ message, onDone }: { message: string; onDone: () => void }) {
@@ -86,7 +89,7 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
     }
   };
 
-  const waitingCount = appointments.filter(t => t.status !== "Cancelled" && (t.token_number ?? 0) > current).length;
+  const waitingCount = data.waiting;
 
   return (
     <div className="p-7 space-y-6">
@@ -165,8 +168,8 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
           <div className="divide-y divide-slate-50">
             {appointments.map((p, idx) => {
               const isCancelled = p.status === "Cancelled";
-              const isCurrent = current > 0 && p.token_number === current && !isCancelled;
-              const isDone = !isCancelled && !isCurrent && (p.token_number ?? 0) < current;
+              const isCurrent = p.queue_status === "In Progress" && !isCancelled;
+              const isDone = p.queue_status === "Done" && !isCancelled;
               const color = avatarColors[idx % avatarColors.length];
               const name = p.patients?.name || "Unknown";
               return (
@@ -203,6 +206,11 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
                       )}
                     </div>
                     {p.patients?.age && <div className="text-[11px] text-slate-400">{p.patients.age} yrs</div>}
+                  </div>
+
+                  {/* Slot time */}
+                  <div className="text-[12px] font-medium text-slate-500 w-20 text-right">
+                    {fmtTime(p.appointment_time)}
                   </div>
 
                   {/* Badge / actions */}

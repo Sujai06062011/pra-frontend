@@ -21,6 +21,7 @@ export interface Appointment {
   appointment_time?: string;
   token_number?: number;
   display_token?: string | null;
+  queue_status?: "Waiting" | "In Progress" | "Done" | "Cancelled";
   status: "Confirmed" | "Cancelled";
   patients?: Patient;
   created_at: string;

@@ -34,13 +34,23 @@ function getThisWeekRange(): { dateFrom: string; dateTo: string } {
 type DerivedStatus = "done" | "in-progress" | "waiting" | "cancelled";
 
 function deriveStatus(apt: Appointment, currentToken: number): DerivedStatus {
-  if (apt.status === "Cancelled") return "cancelled";
+  // Prefer the API's time-order queue_status (slot-position token system)
+  if (apt.queue_status === "Cancelled" || apt.status === "Cancelled") return "cancelled";
+  if (apt.queue_status === "In Progress") return "in-progress";
+  if (apt.queue_status === "Done") return "done";
+  if (apt.queue_status === "Waiting") return "waiting";
   const t = apt.token_number ?? 0;
-  // currentToken IS the token being served (0 = queue not started)
   if (currentToken > 0 && t === currentToken) return "in-progress";
   if (t < currentToken) return "done";
   return "waiting";
 }
+
+const fmtSlotTime = (t?: string) => {
+  if (!t) return "—";
+  const h = parseInt(t.slice(0, 2), 10);
+  const h12 = h % 12 || 12;
+  return `${h12}:${t.slice(3, 5)} ${h >= 12 ? "PM" : "AM"}`;
+};
 
 const statusConfig: Record<DerivedStatus, { label: string; icon: React.ReactNode; cls: string }> = {
   done:          { label: "Done",        icon: <CheckCircle2 size={11} />, cls: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
@@ -176,7 +186,7 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
         <table className="w-full">
           <thead>
             <tr className="bg-slate-50">
-              {["Token", "Patient", "Contact", "Date", "Type", "Status", "Action"].map(h => (
+              {["Token", "Patient", "Contact", "Date", "Time", "Type", "Status", "Action"].map(h => (
                 <th key={h} className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-slate-400 px-5 py-3.5 border-b border-slate-100">
                   {h}
                 </th>
@@ -186,11 +196,11 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="text-center py-10 text-[13px] text-slate-400">Loading appointments…</td>
+                <td colSpan={8} className="text-center py-10 text-[13px] text-slate-400">Loading appointments…</td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center py-10 text-[13px] text-slate-400">No appointments found</td>
+                <td colSpan={8} className="text-center py-10 text-[13px] text-slate-400">No appointments found</td>
               </tr>
             ) : (
               filtered.map((apt, idx) => {
@@ -230,6 +240,7 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
                       {formatMobile(apt.patients?.mobile)}
                     </td>
                     <td className="px-5 py-3.5 text-[12px] text-slate-500">{dateStr}</td>
+                    <td className="px-5 py-3.5 text-[12px] font-medium text-slate-600">{fmtSlotTime(apt.appointment_time)}</td>
                     <td className="px-5 py-3.5">
                       <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">
                         New Visit

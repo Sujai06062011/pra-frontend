@@ -48,9 +48,10 @@ function SlotGrid({
         <span className="text-[11px] text-slate-400">{range}</span>
       </div>
       <div className="flex flex-wrap gap-2">
-        {slots.map(slot => {
+        {slots.map((slot, i) => {
           const isSelected = selected === slot.time;
           const isBooked = !slot.available;
+          const tokenLabel = `${section === "morning" ? "M" : "E"}${i + 1}`;
           const bg = isBooked
             ? "bg-gray-200 text-gray-400 border-gray-200 cursor-not-allowed opacity-50"
             : isSelected
@@ -61,13 +62,13 @@ function SlotGrid({
             <button
               key={slot.time}
               disabled={isBooked}
-              title={isBooked ? "This slot is fully booked" : undefined}
+              title={isBooked ? "This slot is fully booked" : `Token ${tokenLabel}`}
               onClick={isBooked ? undefined : () => onSelect(slot.time)}
               className={`flex flex-col items-center px-3 py-2 rounded-xl border text-[12px] font-semibold transition-all min-w-[64px] ${bg}`}
             >
               <span>{slot.display}</span>
-              <span className={`text-[10px] mt-0.5 font-normal ${isSelected ? "text-emerald-100" : "text-slate-400"}`}>
-                {isBooked ? "Booked" : ""}
+              <span className={`text-[10px] mt-0.5 font-bold ${isBooked ? "text-gray-400" : isSelected ? "text-emerald-100" : "text-emerald-500"}`}>
+                {isBooked ? "Booked" : tokenLabel}
               </span>
             </button>
           );
@@ -103,7 +104,6 @@ export function NewAppointment({
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState("");
   const [visitType, setVisitType] = useState("New Visit");
-  const [nextToken, setNextToken] = useState<number | null>(null);
   const [booking, setBooking] = useState(false);
   const [bookError, setBookError] = useState("");
   const [result, setResult] = useState<BookingResult | null>(null);
@@ -140,13 +140,9 @@ export function NewAppointment({
     setSlotsLoading(true);
     setSlots([]);
     setSelectedSlot("");
-    Promise.all([
-      api.appointments.slots(DOCTOR_ID, appointmentDate),
-      api.appointments.nextToken(DOCTOR_ID, appointmentDate),
-    ]).then(([s, t]) => {
-      setSlots(s);
-      setNextToken(t.token);
-    }).catch(() => {}).finally(() => setSlotsLoading(false));
+    api.appointments.slots(DOCTOR_ID, appointmentDate)
+      .then(s => setSlots(s))
+      .catch(() => {}).finally(() => setSlotsLoading(false));
   }, [appointmentDate, step]);
 
   const morningSlots = slots.filter(s => {
@@ -364,14 +360,30 @@ export function NewAppointment({
                 </div>
 
                 {/* Token preview */}
-                {nextToken !== null && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-                    <div className="text-[12px] text-emerald-600 font-semibold">
-                      Token will be: <span className="text-emerald-700 text-[16px]">#{nextToken}</span>
+                {slots.length > 0 && (() => {
+                  const mi = morningSlots.findIndex(s => s.time === selectedSlot);
+                  const ei = eveningSlots.findIndex(s => s.time === selectedSlot);
+                  const selToken = mi >= 0 ? `M${mi + 1}` : ei >= 0 ? `E${ei + 1}` : null;
+                  return (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                      {selToken ? (
+                        <div className="text-[12px] text-emerald-600 font-semibold">
+                          Token will be: <span className="text-emerald-700 text-[16px]">{selToken}</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="text-[12px] text-emerald-600 font-semibold">
+                            Total Available Morning Tokens: <span className="text-emerald-700">{morningSlots.filter(s => s.available).length}/{morningSlots.length}</span>
+                          </div>
+                          <div className="text-[12px] text-emerald-600 font-semibold mt-0.5">
+                            Total Available Evening Tokens: <span className="text-emerald-700">{eveningSlots.filter(s => s.available).length}/{eveningSlots.length}</span>
+                          </div>
+                        </>
+                      )}
+                      <div className="text-[11px] text-emerald-500 mt-0.5">For {formatDate(appointmentDate)}</div>
                     </div>
-                    <div className="text-[11px] text-emerald-500 mt-0.5">Next available for {formatDate(appointmentDate)}</div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {bookError && (
                   <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 text-[13px] text-rose-700">{bookError}</div>
