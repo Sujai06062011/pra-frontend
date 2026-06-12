@@ -22,7 +22,7 @@ export interface Appointment {
   token_number?: number;
   display_token?: string | null;
   queue_status?: "Waiting" | "In Progress" | "Done" | "Cancelled";
-  status: "Confirmed" | "Cancelled";
+  status: "Confirmed" | "In Progress" | "Completed" | "Cancelled";
   patients?: Patient;
   created_at: string;
 }

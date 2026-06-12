@@ -1,40 +1,25 @@
-import { useState, useEffect } from "react";
-import { ChevronRight, ChevronLeft, Clock, Users, CheckCircle2, Activity, RefreshCw, AlertTriangle } from "lucide-react";
+import { useState } from "react";
+import { ChevronRight, ChevronLeft, Clock, Users, CheckCircle2, Activity, RefreshCw } from "lucide-react";
 import { useQueue } from "../../../hooks/usePRAData";
+import { api } from "../../../lib/api";
 import type { Appointment } from "../../../lib/api";
+import {
+  isEvening,
+  getActiveAppointments,
+  getCurrentAppointment,
+  getFirstAppointment,
+  getFirstPendingAppointment,
+  getNextAppointment,
+  getPrevAppointment,
+  isAllDone,
+  patientName,
+} from "../../../utils/queueUtils";
 
 const avatarColors = [
   "from-violet-400 to-purple-500", "from-pink-400 to-rose-500", "from-sky-400 to-blue-500",
   "from-emerald-400 to-teal-500", "from-amber-400 to-orange-500", "from-lime-400 to-emerald-500",
   "from-cyan-400 to-sky-500",
 ];
-
-// ── queue navigation (slot TIME order) ───────────────────
-// current_token identifies the serving appointment; Next/Prev walk the
-// non-cancelled appointments sorted by appointment_time, not token number.
-const byTime = (a: Appointment, b: Appointment) =>
-  (a.appointment_time ?? "").localeCompare(b.appointment_time ?? "");
-
-function activeByTime(appointments: Appointment[]): Appointment[] {
-  return appointments.filter(t => t.status !== "Cancelled" && t.token_number).sort(byTime);
-}
-
-function getNextToken(current: number, appointments: Appointment[]): { token: number; skipped: Appointment[] } | null {
-  const active = activeByTime(appointments);
-  if (!active.length) return null;
-  const idx = current > 0 ? active.findIndex(t => t.token_number === current) : -1;
-  const next = active[idx + 1];
-  if (!next) return null;
-  return { token: next.token_number ?? 0, skipped: [] };
-}
-
-function getPrevToken(current: number, appointments: Appointment[]): { token: number; skipped: Appointment[] } | null {
-  if (current <= 0) return null;
-  const active = activeByTime(appointments);
-  const idx = active.findIndex(t => t.token_number === current);
-  if (idx <= 0) return { token: 0, skipped: [] }; // back to "not started"
-  return { token: active[idx - 1].token_number ?? 0, skipped: [] };
-}
 
 const fmtTime = (t?: string) => {
   if (!t) return "";
@@ -43,58 +28,136 @@ const fmtTime = (t?: string) => {
   return `${h12}:${t.slice(3, 5)} ${h >= 12 ? "PM" : "AM"}`;
 };
 
-// ── toast ─────────────────────────────────────────────────
-function Toast({ message, onDone }: { message: string; onDone: () => void }) {
-  useEffect(() => {
-    const t = setTimeout(onDone, 3000);
-    return () => clearTimeout(t);
-  }, [onDone]);
-  return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-amber-500 text-white text-[13px] font-semibold px-4 py-2.5 rounded-xl shadow-lg shadow-amber-200 animate-fade-in">
-      <AlertTriangle size={15} /> {message}
-    </div>
-  );
-}
-
 // ── component ─────────────────────────────────────────────
 export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appointmentId: string) => void } = {}) {
   const { data, loading, error, refetch, setToken } = useQueue();
-  const [toast, setToast] = useState("");
-
-  const current = data.current_token;
   const appointments = data.appointments;
 
-  // In-progress = the appointment whose token equals current_token (0 = not started)
-  const currentPatient = current > 0
-    ? appointments.find(p => (p.token_number ?? 0) === current && p.status !== "Cancelled")
-    : undefined;
+  // Session transition popup
+  const [showSessionPopup, setShowSessionPopup] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    type: "next" | "prev";
+    targetAppointment: Appointment;
+    targetSession: "morning" | "evening";
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const handleNext = async () => {
-    const result = getNextToken(current, appointments);
-    if (!result) return;
-    await setToken(result.token);
-    if (result.skipped.length > 0) {
-      const names = result.skipped.map(s => `#${s.token_number} (${s.patients?.name ?? "?"})`).join(", ");
-      setToast(`Skipped ${names} — Cancelled`);
+  const currentPatient = getCurrentAppointment(appointments);
+  const firstPatient = getFirstAppointment(appointments);
+  const allDone = isAllDone(appointments);
+  const prevResult = currentPatient ? getPrevAppointment(currentPatient, appointments) : null;
+
+  // Next disabled only when everyone is done; Prev when there is nothing to go back to
+  const isNextDisabled = loading || busy || allDone;
+  const isPrevDisabled = loading || busy || !currentPatient || !prevResult;
+
+  // ── status transitions (uses existing endpoints) ────────
+  // PATCH /appointments/{id}/status + POST /queue/set-token via setToken().
+  // DB statuses: "Completed" = Done, "Confirmed" = Waiting.
+  const advanceToAppointment = async (target: Appointment, previous: Appointment | null) => {
+    setBusy(true);
+    try {
+      if (previous) await api.appointments.updateStatus(previous.id, "Completed");
+      await api.appointments.updateStatus(target.id, "In Progress");
+      await setToken(target.token_number ?? 0); // syncs tokens table + refetches
+    } finally {
+      setBusy(false);
     }
+  };
+
+  const revertToAppointment = async (current: Appointment, prev: Appointment) => {
+    setBusy(true);
+    try {
+      await api.appointments.updateStatus(current.id, "Confirmed"); // back to Waiting
+      await api.appointments.updateStatus(prev.id, "In Progress");  // Done → In Progress
+      await setToken(prev.token_number ?? 0);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const finishLastPatient = async (current: Appointment) => {
+    setBusy(true);
+    try {
+      await api.appointments.updateStatus(current.id, "Completed");
+      await setToken(0);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ── Next / Prev handlers ─────────────────────────────────
+  const handleNext = async () => {
+    const current = getCurrentAppointment(appointments);
+
+    // Start of day — no one In Progress yet
+    if (!current) {
+      const first = getFirstPendingAppointment(appointments);
+      if (!first) return;
+      await advanceToAppointment(first, null);
+      return;
+    }
+
+    const next = getNextAppointment(current, appointments);
+
+    // Last patient finished — mark them done, day complete
+    if (!next) {
+      await finishLastPatient(current);
+      return;
+    }
+
+    if (next.crossSession && next.targetSession) {
+      setPendingAction({ type: "next", targetAppointment: next.appointment, targetSession: next.targetSession });
+      setShowSessionPopup(true);
+      return;
+    }
+
+    await advanceToAppointment(next.appointment, current);
   };
 
   const handlePrev = async () => {
-    const result = getPrevToken(current, appointments);
-    if (!result) return;
-    await setToken(result.token);
-    if (result.skipped.length > 0) {
-      const names = result.skipped.map(s => `#${s.token_number} (${s.patients?.name ?? "?"})`).join(", ");
-      setToast(`Skipped ${names} — Cancelled`);
+    const current = getCurrentAppointment(appointments);
+    if (!current) return;
+
+    const prev = getPrevAppointment(current, appointments);
+    if (!prev) return; // already at first patient (button disabled anyway)
+
+    if (prev.crossSession && prev.targetSession) {
+      setPendingAction({ type: "prev", targetAppointment: prev.appointment, targetSession: prev.targetSession });
+      setShowSessionPopup(true);
+      return;
     }
+
+    await revertToAppointment(current, prev.appointment);
   };
 
-  const waitingCount = data.waiting;
+  // ── session popup confirm/cancel ─────────────────────────
+  const handleSessionConfirm = async () => {
+    if (!pendingAction) return;
+    const current = getCurrentAppointment(appointments);
+
+    if (pendingAction.type === "next") {
+      await advanceToAppointment(pendingAction.targetAppointment, current);
+    } else if (current) {
+      await revertToAppointment(current, pendingAction.targetAppointment);
+    }
+
+    setShowSessionPopup(false);
+    setPendingAction(null);
+  };
+
+  const handleSessionCancel = () => {
+    setShowSessionPopup(false);
+    setPendingAction(null);
+  };
+
+  const eveningWaitingCount = appointments.filter(p =>
+    isEvening(p.appointment_time) &&
+    p.status !== "Cancelled" && p.status !== "Completed" && p.queue_status !== "Done"
+  ).length;
 
   return (
     <div className="p-7 space-y-6">
-      {toast && <Toast message={toast} onDone={() => setToast("")} />}
-
       {error && (
         <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
           <span className="text-[13px] text-rose-700 flex-1">Failed to load queue data.</span>
@@ -106,27 +169,60 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
 
       {/* Hero queue display */}
       <div className="grid grid-cols-3 gap-4">
-        {/* Current token hero */}
-        <div className="col-span-1 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-200 flex flex-col items-center justify-center gap-2">
-          <div className="text-sm font-semibold opacity-80 uppercase tracking-widest">Now Serving</div>
-          <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 80, lineHeight: 1 }}>
-            {loading ? "…" : (current > 0 ? (data.current_display || current) : "—")}
-          </div>
-          {currentPatient && (
-            <div className="text-center">
-              <div className="font-semibold text-base">{currentPatient.patients?.name || "—"}</div>
-            </div>
+        {/* Now Serving card */}
+        <div className="col-span-1 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-200 flex flex-col items-center justify-center gap-1">
+          {loading ? (
+            <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 56, lineHeight: 1 }}>…</div>
+          ) : currentPatient ? (
+            <>
+              <div className="text-xs font-semibold opacity-80 uppercase tracking-widest">Now Serving</div>
+              <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 64, lineHeight: 1.1 }}>
+                {currentPatient.display_token || currentPatient.token_number}
+              </div>
+              <div className="font-semibold text-base text-center">{patientName(currentPatient)}</div>
+              <div className="text-[12px] opacity-70">
+                {isEvening(currentPatient.appointment_time) ? "🌙 Evening Session" : "🌅 Morning Session"}
+              </div>
+            </>
+          ) : allDone ? (
+            <>
+              <div className="text-4xl mb-1">🎉</div>
+              <div className="text-lg font-semibold">All done for today!</div>
+              <div className="text-[12px] opacity-70">All patients have been seen</div>
+            </>
+          ) : firstPatient ? (
+            <>
+              <div className="text-xs font-semibold opacity-80 uppercase tracking-widest mb-1">Tap Next to begin</div>
+              <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 48, lineHeight: 1 }} className="opacity-40">
+                {firstPatient.display_token || firstPatient.token_number}
+              </div>
+              <div className="text-base font-medium opacity-60">{patientName(firstPatient)}</div>
+              <div className="text-[12px] opacity-50">First patient today</div>
+            </>
+          ) : (
+            <div className="text-[13px] opacity-70">No appointments today</div>
           )}
+
           <div className="flex gap-3 mt-4 w-full">
             <button
               onClick={handlePrev}
-              className="flex-1 flex items-center justify-center gap-1 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white text-[13px] font-semibold transition-colors"
+              disabled={isPrevDisabled}
+              className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-xl text-[13px] font-semibold transition-colors ${
+                isPrevDisabled
+                  ? "opacity-40 cursor-not-allowed bg-white/10 text-white/60"
+                  : "bg-white/20 hover:bg-white/30 text-white cursor-pointer"
+              }`}
             >
               <ChevronLeft size={16} /> Prev
             </button>
             <button
               onClick={handleNext}
-              className="flex-1 flex items-center justify-center gap-1 py-2 rounded-xl bg-white text-emerald-700 text-[13px] font-semibold hover:bg-emerald-50 transition-colors shadow-sm"
+              disabled={isNextDisabled}
+              className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-xl text-[13px] font-semibold transition-colors ${
+                isNextDisabled
+                  ? "opacity-40 cursor-not-allowed bg-white/30 text-white/70"
+                  : "bg-white text-emerald-700 hover:bg-emerald-50 cursor-pointer shadow-sm"
+              }`}
             >
               Next <ChevronRight size={16} />
             </button>
@@ -136,7 +232,7 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
         {/* Stats */}
         <div className="col-span-2 grid grid-cols-2 gap-4">
           {[
-            { icon: <Users size={22} className="text-blue-600" />, label: "Waiting", value: loading ? "—" : waitingCount, sub: "patients in queue", bg: "bg-blue-50", border: "border-blue-100" },
+            { icon: <Users size={22} className="text-blue-600" />, label: "Waiting", value: loading ? "—" : data.waiting, sub: "patients in queue", bg: "bg-blue-50", border: "border-blue-100" },
             { icon: <Clock size={22} className="text-amber-600" />, label: "Avg Wait Time", value: "—", sub: "current estimate", bg: "bg-amber-50", border: "border-amber-100" },
             { icon: <CheckCircle2 size={22} className="text-emerald-600" />, label: "Completed", value: loading ? "—" : data.completed, sub: "today so far", bg: "bg-emerald-50", border: "border-emerald-100" },
             { icon: <Activity size={22} className="text-violet-600" />, label: "Total Tokens", value: loading ? "—" : data.total_today, sub: "issued today", bg: "bg-violet-50", border: "border-violet-100" },
@@ -253,6 +349,81 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
           </div>
         )}
       </div>
+
+      {/* Session transition popup */}
+      {showSessionPopup && pendingAction && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 mx-4 max-w-sm w-full shadow-2xl">
+            <div className="text-4xl text-center mb-3">
+              {pendingAction.targetSession === "evening" ? "🌙" : "🌅"}
+            </div>
+
+            <h3 className="text-lg font-semibold text-center text-slate-900 mb-2">
+              {pendingAction.type === "next"
+                ? pendingAction.targetSession === "evening"
+                  ? "Morning session complete!"
+                  : "Go back to morning session?"
+                : pendingAction.targetSession === "morning"
+                  ? "Go back to morning session?"
+                  : "Jump to evening session?"}
+            </h3>
+
+            <p className="text-sm text-center text-slate-500 mb-6">
+              {pendingAction.type === "next" && pendingAction.targetSession === "evening" && (
+                <>
+                  {eveningWaitingCount} evening patient{eveningWaitingCount === 1 ? "" : "s"} waiting
+                  <span className="block mt-1 text-indigo-500">
+                    Starting with {pendingAction.targetAppointment.display_token}{" "}
+                    {patientName(pendingAction.targetAppointment)}
+                  </span>
+                </>
+              )}
+              {pendingAction.type === "next" && pendingAction.targetSession === "morning" && (
+                <>
+                  Morning patients are still pending
+                  <span className="block mt-1 text-amber-500">
+                    Next is {pendingAction.targetAppointment.display_token}{" "}
+                    {patientName(pendingAction.targetAppointment)}
+                  </span>
+                </>
+              )}
+              {pendingAction.type === "prev" && (
+                <>
+                  Going back to {pendingAction.targetAppointment.display_token}{" "}
+                  {patientName(pendingAction.targetAppointment)}
+                  <span className="block mt-1 text-amber-500">
+                    Current patient will be set back to Waiting
+                  </span>
+                </>
+              )}
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleSessionCancel}
+                className="flex-1 py-3 px-4 rounded-xl border border-slate-200 text-slate-700 font-medium hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSessionConfirm}
+                disabled={busy}
+                className={`flex-1 py-3 px-4 rounded-xl text-white font-medium transition-colors ${
+                  pendingAction.targetSession === "evening"
+                    ? "bg-indigo-600 hover:bg-indigo-700"
+                    : "bg-amber-500 hover:bg-amber-600"
+                }`}
+              >
+                {pendingAction.type === "next"
+                  ? pendingAction.targetSession === "evening"
+                    ? "Start Evening →"
+                    : "Go Back →"
+                  : "← Go Back"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
