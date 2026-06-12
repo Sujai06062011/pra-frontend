@@ -120,6 +120,24 @@ export interface Doctor {
   mobile?: string;
 }
 
+export interface VisitVitals {
+  id?: string;
+  visit_id?: string;
+  patient_id?: string;
+  doctor_id?: string;
+  temperature_f?: number | string | null;
+  weight_kg?: number | string | null;
+  height_cm?: number | string | null;
+  spo2_percent?: number | string | null;
+  bp_systolic?: number | string | null;
+  bp_diastolic?: number | string | null;
+  pulse_bpm?: number | string | null;
+  key_findings?: string | null;
+  recorded_by_role?: string;
+  recorded_at?: string;
+  updated_at?: string;
+}
+
 export interface Visit {
   id: string;
   patient_id: string;
@@ -288,6 +306,24 @@ export const api = {
       req<BookingResult>("/appointments/book", { method: "POST", body: JSON.stringify(data) }),
   },
 
+  visits: {
+    getByPatient: (patientId: string) =>
+      req<Visit[]>(`/patients/${patientId}/visits`),
+    create: (data: { patient_id: string; doctor_id: string; appointment_id?: string | null }) =>
+      req<Visit>("/visits", { method: "POST", body: JSON.stringify(data) }),
+    getVitals: (visitId: string) =>
+      req<{ vitals: VisitVitals | null }>(`/visits/${visitId}/vitals`),
+    saveVitals: (visitId: string, vitals: VisitVitals) =>
+      req<{ success: boolean; vitals: VisitVitals | null }>(`/visits/${visitId}/vitals`, {
+        method: "POST",
+        body: JSON.stringify(vitals),
+      }),
+    vitalsHistory: (patientId: string) =>
+      req<{ history: (VisitVitals & { visits?: { visit_date?: string; chief_complaint?: string } })[] }>(
+        `/patients/${patientId}/vitals-history`
+      ),
+  },
+
   queue: {
     status: (doctorId: string, date?: string) => {
       const params = new URLSearchParams({ doctor_id: doctorId });
@@ -406,11 +442,6 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify({ answer }),
       }),
-  },
-
-  visits: {
-    getByPatient: (patientId: string) =>
-      req<Visit[]>(`/patients/${patientId}/visits`),
   },
 
   reviews: {

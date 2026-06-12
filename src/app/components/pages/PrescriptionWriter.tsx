@@ -5,6 +5,7 @@ import {
   Search, UserX, UserCheck, ChevronRight,
 } from "lucide-react";
 import { api, type Patient } from "../../../lib/api";
+import { VitalsSection } from "../shared/VitalsSection";
 import { MedicineRow, type MedicineFormRow } from "../prescription/MedicineRow";
 import {
   DIAGNOSIS_SUGGESTIONS, DIETARY_NOTES_OPTIONS,
@@ -404,6 +405,24 @@ export function PrescriptionWriter({
   // Derived: effective patient for display
   const displayName = patient?.name || linkedPatient?.name || (isWalkin ? walkinName : null);
   const formActive = isEditMode || !!patient || !!linkedPatient || isWalkin;
+  const effectivePatientIdForVisit = patient?.id || linkedPatient?.patient_id || "";
+
+  // Ensure a visit exists once a real patient is active, so vitals can be
+  // recorded before the prescription is saved. The prescription save passes
+  // this visit_id through and the backend completes the visit.
+  const creatingVisitRef = useRef(false);
+  useEffect(() => {
+    if (isEditMode || isWalkin || !effectivePatientIdForVisit || visitId || creatingVisitRef.current) return;
+    creatingVisitRef.current = true;
+    api.visits.create({
+      patient_id: effectivePatientIdForVisit,
+      doctor_id: doctorId,
+      appointment_id: appointmentId || undefined,
+    })
+      .then(v => setVisitId(v.id))
+      .catch(err => console.error("Failed to create visit", err))
+      .finally(() => { creatingVisitRef.current = false; });
+  }, [isEditMode, isWalkin, effectivePatientIdForVisit, visitId, doctorId, appointmentId]);
 
   // Medicine handlers
   const addMedicine = () => setMedicines(prev => [...prev, makeEmptyMed()]);
@@ -666,6 +685,15 @@ export function PrescriptionWriter({
                 />
                 {errors.chief_complaint && <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={11} /> {errors.chief_complaint}</p>}
               </div>
+
+              {/* Vitals & Examination — self-contained, saves independently */}
+              {visitId && !isWalkin && (
+                <VitalsSection
+                  visitId={visitId}
+                  patientId={effectivePatientIdForVisit}
+                  editable={true}
+                />
+              )}
 
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
