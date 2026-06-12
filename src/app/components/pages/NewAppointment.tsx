@@ -50,24 +50,24 @@ function SlotGrid({
       <div className="flex flex-wrap gap-2">
         {slots.map(slot => {
           const isSelected = selected === slot.time;
-          const count = slot.booked_count;
-          let bg = isSelected
+          const isBooked = !slot.available;
+          const bg = isBooked
+            ? "bg-gray-200 text-gray-400 border-gray-200 cursor-not-allowed opacity-50"
+            : isSelected
             ? "bg-emerald-500 text-white border-emerald-500 shadow-md"
-            : count === 0
-            ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:border-emerald-400"
-            : count >= slot.max
-            ? "bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-400"
-            : "bg-amber-50 text-amber-700 border-amber-200 hover:border-amber-400";
+            : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:border-emerald-400 cursor-pointer";
 
           return (
             <button
               key={slot.time}
-              onClick={() => onSelect(slot.time)}
+              disabled={isBooked}
+              title={isBooked ? "This slot is fully booked" : undefined}
+              onClick={isBooked ? undefined : () => onSelect(slot.time)}
               className={`flex flex-col items-center px-3 py-2 rounded-xl border text-[12px] font-semibold transition-all min-w-[64px] ${bg}`}
             >
               <span>{slot.display}</span>
               <span className={`text-[10px] mt-0.5 font-normal ${isSelected ? "text-emerald-100" : "text-slate-400"}`}>
-                {count > 0 ? count : ""}
+                {isBooked ? "Booked" : ""}
               </span>
             </button>
           );
@@ -423,7 +423,7 @@ export function NewAppointment({
                 </div>
                 <div className="flex items-center justify-between text-[13px]">
                   <span className="text-slate-400">Token</span>
-                  <span className="font-bold text-emerald-600 text-[16px]">#{result.token_number}</span>
+                  <span className="font-bold text-emerald-600 text-[16px]">{result.display_token || `#${result.token_number}`}</span>
                 </div>
                 <div className="flex items-center justify-between text-[13px]">
                   <span className="text-slate-400">WhatsApp</span>

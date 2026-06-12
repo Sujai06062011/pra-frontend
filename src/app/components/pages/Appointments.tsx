@@ -207,7 +207,7 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
                   <tr key={apt.id} className={`border-b border-slate-50 transition-colors cursor-pointer ${isCancelled ? "bg-rose-50" : "hover:bg-emerald-50/30"}`}>
                     <td className="px-5 py-3.5">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold ${isCancelled ? "bg-slate-200 text-slate-400" : apt.derivedStatus === "in-progress" ? "bg-emerald-500 text-white shadow-sm" : "bg-slate-100 text-slate-500"}`}>
-                        {apt.token_number ?? "—"}
+                        {apt.display_token || apt.token_number || "—"}
                       </div>
                     </td>
                     <td className="px-5 py-3.5">

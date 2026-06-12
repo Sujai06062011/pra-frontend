@@ -20,6 +20,7 @@ export interface Appointment {
   appointment_date: string;
   appointment_time?: string;
   token_number?: number;
+  display_token?: string | null;
   status: "Confirmed" | "Cancelled";
   patients?: Patient;
   created_at: string;
@@ -47,8 +48,12 @@ export interface Medicine {
 export interface Prescription {
   id: string;
   doctor_id: string;
-  patient_id: string;
+  patient_id: string | null;
   visit_id?: string;
+  walkin_name?: string;
+  walkin_age?: number;
+  walkin_complaint?: string;
+  walkin_diagnosis?: string;
   prescription_date?: string;
   general_notes?: string;
   precautions?: string;
@@ -86,6 +91,7 @@ export interface Review {
 export interface DashboardStats {
   today_appointments: number;
   current_token: number;
+  current_display_token?: string | null;
   total_patients: number;
   pending_followups: number;
   today_completed: number;
@@ -95,6 +101,7 @@ export interface DashboardStats {
 
 export interface QueueStatus {
   current_token: number;
+  current_display?: string | null;
   total_today: number;
   waiting: number;
   completed: number;
@@ -182,6 +189,7 @@ export interface BookAppointmentPayload {
 export interface BookingResult {
   appointment_id: string;
   token_number: number;
+  display_token?: string | null;
   patient_name: string;
   whatsapp_sent: boolean;
 }
@@ -324,6 +332,7 @@ export const api = {
       walkin_name?: string | null;
       walkin_age?: number | null;
       chief_complaint: string;
+      diagnosis: string;
       dietary_instructions: string;
       precautions: string;
       general_notes: string;

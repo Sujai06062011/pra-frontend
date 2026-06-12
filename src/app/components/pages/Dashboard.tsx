@@ -214,7 +214,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
             <div className="text-center">
               <div className="text-[10px] uppercase tracking-widest text-slate-400 mb-1">Now Serving</div>
               <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 44, lineHeight: 1, color: "#10b981" }} className="drop-shadow-sm">
-                {statsLoading ? "—" : (stats.current_token || "—")}
+                {statsLoading ? "—" : (stats.current_display_token || stats.current_token || "—")}
               </div>
             </div>
             <div className="w-px h-14 bg-slate-100" />
@@ -349,7 +349,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
                   <tr key={apt.id} className={`border-b border-slate-50 transition-colors cursor-pointer group ${isCancelled ? "opacity-60" : "hover:bg-slate-50/60"}`}>
                     <td className="px-5 py-3.5">
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold ${isCancelled ? "bg-slate-200 text-slate-400" : mappedStatus === "in-progress" ? "bg-emerald-500 text-white shadow-sm" : "bg-slate-100 text-slate-600"}`}>
-                        {apt.token_number ?? "—"}
+                        {apt.display_token || apt.token_number || "—"}
                       </div>
                     </td>
                     <td className="px-5 py-3.5">

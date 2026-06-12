@@ -107,7 +107,7 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
         <div className="col-span-1 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-200 flex flex-col items-center justify-center gap-2">
           <div className="text-sm font-semibold opacity-80 uppercase tracking-widest">Now Serving</div>
           <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 80, lineHeight: 1 }}>
-            {loading ? "…" : (current > 0 ? current : "—")}
+            {loading ? "…" : (current > 0 ? (data.current_display || current) : "—")}
           </div>
           {currentPatient && (
             <div className="text-center">
@@ -184,7 +184,7 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
                     isDone      ? "bg-slate-100 text-slate-400" :
                                   "bg-slate-100 text-slate-600"
                   }`}>
-                    {p.token_number ?? "—"}
+                    {p.display_token || p.token_number || "—"}
                   </div>
 
                   {/* Avatar */}
