@@ -176,6 +176,7 @@ export interface SlotInfo {
   display: string;
   booked_count: number;
   max: number;
+  past?: boolean;
   available: boolean;
 }
 

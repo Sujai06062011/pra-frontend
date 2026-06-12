@@ -50,9 +50,11 @@ function SlotGrid({
       <div className="flex flex-wrap gap-2">
         {slots.map((slot, i) => {
           const isSelected = selected === slot.time;
-          const isBooked = !slot.available;
+          const isPast = !!slot.past;
+          const isBooked = !slot.available && !isPast;
+          const isDisabled = isPast || isBooked;
           const tokenLabel = `${section === "morning" ? "M" : "E"}${i + 1}`;
-          const bg = isBooked
+          const bg = isDisabled
             ? "bg-gray-200 text-gray-400 border-gray-200 cursor-not-allowed opacity-50"
             : isSelected
             ? "bg-emerald-500 text-white border-emerald-500 shadow-md"
@@ -61,14 +63,14 @@ function SlotGrid({
           return (
             <button
               key={slot.time}
-              disabled={isBooked}
-              title={isBooked ? "This slot is fully booked" : `Token ${tokenLabel}`}
-              onClick={isBooked ? undefined : () => onSelect(slot.time)}
+              disabled={isDisabled}
+              title={isPast ? "This time has already passed" : isBooked ? "This slot is fully booked" : `Token ${tokenLabel}`}
+              onClick={isDisabled ? undefined : () => onSelect(slot.time)}
               className={`flex flex-col items-center px-3 py-2 rounded-xl border text-[12px] font-semibold transition-all min-w-[64px] ${bg}`}
             >
               <span>{slot.display}</span>
-              <span className={`text-[10px] mt-0.5 font-bold ${isBooked ? "text-gray-400" : isSelected ? "text-emerald-100" : "text-emerald-500"}`}>
-                {isBooked ? "Booked" : tokenLabel}
+              <span className={`text-[10px] mt-0.5 font-bold ${isDisabled ? "text-gray-400" : isSelected ? "text-emerald-100" : "text-emerald-500"}`}>
+                {isPast ? "Past" : isBooked ? "Booked" : tokenLabel}
               </span>
             </button>
           );
