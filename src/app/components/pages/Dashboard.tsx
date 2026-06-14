@@ -27,10 +27,11 @@ const avatarColors = [
 ];
 
 const statusConfig = {
-  done: { label: "Done", icon: <CheckCircle2 size={12} />, cls: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
+  done: { label: "Seen", icon: <CheckCircle2 size={12} />, cls: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
   "in-progress": { label: "In Progress", icon: <Activity size={12} />, cls: "bg-blue-50 text-blue-700 border border-blue-200" },
   waiting: { label: "Waiting", icon: <Clock size={12} />, cls: "bg-amber-50 text-amber-700 border border-amber-200" },
   cancelled: { label: "Cancelled", icon: <XCircle size={12} />, cls: "bg-rose-50 text-rose-700 border border-rose-200" },
+  "no-show": { label: "No Show", icon: <XCircle size={12} />, cls: "bg-orange-50 text-orange-600 border border-orange-200" },
 };
 
 interface StatCardProps {
@@ -104,6 +105,64 @@ function getMonthRange() {
   return { from, to };
 }
 
+const DASH_STATUS_ORDER: Record<string, number> = { "in-progress": 0, waiting: 1, done: 2, "no-show": 3, cancelled: 4 };
+function dashTokenNum(tok?: string | number | null) {
+  const s = String(tok ?? ""); const m = s.match(/(\d+)$/); return m ? parseInt(m[1], 10) : 0;
+}
+function DashboardApptRows({ appts, currentToken }: { appts: ReturnType<typeof useTodayAppointments>["data"]; currentToken: number }) {
+  const activeAppts = appts.filter(a => a.status !== "Cancelled" && a.status !== "No-Show" && a.status !== "Completed");
+  if (activeAppts.length === 0) return <tr><td colSpan={5} className="px-5 py-8 text-center text-[13px] text-slate-400">No active patients right now</td></tr>;
+  const withStatus = activeAppts.map(apt => {
+    const t = apt.token_number ?? 0;
+    const mappedStatus: string =
+      apt.status === "No-Show"                                       ? "no-show" :
+      apt.queue_status === "Cancelled" || apt.status === "Cancelled" ? "cancelled" :
+      apt.queue_status === "In Progress"                             ? "in-progress" :
+      apt.queue_status === "Done" || apt.status === "Completed"      ? "done" :
+      apt.queue_status === "Waiting"                                 ? "waiting" :
+      currentToken > 0 && t === currentToken                        ? "in-progress" :
+      t < currentToken                                               ? "done" : "waiting";
+    return { ...apt, _ms: mappedStatus };
+  });
+  const sorted = [...withStatus].sort((a, b) => {
+    const sd = (DASH_STATUS_ORDER[a._ms] ?? 9) - (DASH_STATUS_ORDER[b._ms] ?? 9);
+    return sd !== 0 ? sd : dashTokenNum(a.display_token ?? a.token_number) - dashTokenNum(b.display_token ?? b.token_number);
+  });
+  return <>{sorted.slice(0, 10).map((apt, idx) => {
+    const s = statusConfig[apt._ms as keyof typeof statusConfig];
+    const color = avatarColors[idx % avatarColors.length];
+    const isCancelled = apt._ms === "cancelled";
+    const patientName = apt.patients?.name || "Unknown";
+    return (
+      <tr key={apt.id} className={`border-b border-slate-50 transition-colors cursor-pointer group ${isCancelled ? "opacity-60" : "hover:bg-slate-50/60"}`}>
+        <td className="px-5 py-3.5">
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold ${isCancelled ? "bg-slate-200 text-slate-400" : apt._ms === "in-progress" ? "bg-emerald-500 text-white shadow-sm" : "bg-slate-100 text-slate-600"}`}>
+            {apt.display_token || apt.token_number || "—"}
+          </div>
+        </td>
+        <td className="px-5 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center text-white text-[12px] font-bold shadow-sm`}>{patientName[0]}</div>
+            <div>
+              <div className={`text-[13px] font-medium text-slate-800 ${isCancelled ? "line-through text-slate-400" : ""}`}>{patientName}</div>
+              {apt.patients?.age && <div className="text-[11px] text-slate-400">{apt.patients.age} yrs</div>}
+            </div>
+          </div>
+        </td>
+        <td className="px-5 py-3.5 text-[12px] text-slate-400">
+          {apt.appointment_date ? new Date(apt.appointment_date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—"}
+        </td>
+        <td className="px-5 py-3.5 text-[12px] font-medium text-slate-500">
+          {(() => { const tt = apt.appointment_time; if (!tt) return "—"; const h = parseInt(tt.slice(0,2),10); const h12 = h%12||12; return `${h12}:${tt.slice(3,5)} ${h>=12?"PM":"AM"}`; })()}
+        </td>
+        <td className="px-5 py-3.5">
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${s.cls}`}>{s.icon}{s.label}</span>
+        </td>
+      </tr>
+    );
+  })}</>;
+}
+
 export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void }) {
   const { doctorId } = useAuth();
   const [alertVisible, setAlertVisible] = useState(true);
@@ -136,7 +195,8 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
   }));
 
   const tabLabel = activeTab === "today" ? "Today" : activeTab === "week" ? "This Week" : "This Month";
-  const tabCount = tabAppts.filter(a => a.status !== "Cancelled").length;
+  const tabCount = tabAppts.filter(a => a.status !== "Cancelled" && a.status !== "No-Show").length;
+  const activeCount = tabAppts.filter(a => a.status === "In Progress" || a.status === "Confirmed").length;
 
   return (
     <div className="p-7 space-y-6">
@@ -196,7 +256,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
             accentBg="bg-emerald-50"
             details={[
               { dot: "bg-emerald-500", label: `${statsLoading ? "—" : stats.today_completed} Completed` },
-              { dot: "bg-rose-500", label: `${statsLoading ? "—" : stats.today_appointments - stats.today_completed} Remaining` },
+              { dot: "bg-rose-500", label: `${statsLoading ? "—" : Math.max(0, stats.today_appointments - stats.today_completed - (todayAppts.filter(a => a.status === "No-Show").length))} Remaining` },
             ]}
           />
         </div>
@@ -307,7 +367,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
               <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15 }} className="text-slate-800">
                 {tabLabel} Appointments
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">{tabLoading ? "…" : `${tabCount} total`}</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">{tabLoading ? "…" : activeTab === "today" ? `${activeCount} active` : `${tabCount} total`}</p>
             </div>
             <button
               onClick={() => onNavigate?.("appointments")}
@@ -322,7 +382,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
           <table className="w-full">
             <thead>
               <tr className="bg-slate-50/60">
-                {["Token", "Patient", "Date", "Time", "Status", "Action"].map((h) => (
+                {["Token", "Patient", "Date", "Time", "Status"].map((h) => (
                   <th key={h} className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-slate-400 px-5 py-3 border-b border-slate-100">
                     {h}
                   </th>
@@ -330,77 +390,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
               </tr>
             </thead>
             <tbody>
-              {(tabAppts.length === 0) ? (
-                <tr><td colSpan={6} className="px-5 py-8 text-center text-[13px] text-slate-400">No appointments for this period</td></tr>
-              ) : tabAppts.slice(0, 8).map((apt, idx) => {
-                const patientName = apt.patients?.name || "Unknown";
-                const patientAge = apt.patients?.age;
-                const currentToken = stats.current_token ?? 0;
-                const t = apt.token_number ?? 0;
-                // Prefer the API's time-order queue_status
-                const mappedStatus: string =
-                  apt.queue_status === "Cancelled" || apt.status === "Cancelled" ? "cancelled" :
-                  apt.queue_status === "In Progress" ? "in-progress" :
-                  apt.queue_status === "Done"        ? "done" :
-                  apt.queue_status === "Waiting"     ? "waiting" :
-                  currentToken > 0 && t === currentToken ? "in-progress" :
-                  t < currentToken                       ? "done" :
-                                                           "waiting";
-                const s = statusConfig[mappedStatus as keyof typeof statusConfig];
-                const color = avatarColors[idx % avatarColors.length];
-                const isCancelled = mappedStatus === "cancelled";
-                return (
-                  <tr key={apt.id} className={`border-b border-slate-50 transition-colors cursor-pointer group ${isCancelled ? "opacity-60" : "hover:bg-slate-50/60"}`}>
-                    <td className="px-5 py-3.5">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-bold ${isCancelled ? "bg-slate-200 text-slate-400" : mappedStatus === "in-progress" ? "bg-emerald-500 text-white shadow-sm" : "bg-slate-100 text-slate-600"}`}>
-                        {apt.display_token || apt.token_number || "—"}
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2.5">
-                        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center text-white text-[12px] font-bold shadow-sm`}>
-                          {patientName[0]}
-                        </div>
-                        <div>
-                          <div className={`text-[13px] font-medium text-slate-800 ${isCancelled ? "line-through text-slate-400" : ""}`}>{patientName}</div>
-                          {patientAge && <div className="text-[11px] text-slate-400">{patientAge} yrs</div>}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 text-[12px] text-slate-400">
-                      {apt.appointment_date ? new Date(apt.appointment_date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—"}
-                    </td>
-                    <td className="px-5 py-3.5 text-[12px] font-medium text-slate-500">
-                      {(() => { const tt = apt.appointment_time; if (!tt) return "—"; const h = parseInt(tt.slice(0,2),10); const h12 = h % 12 || 12; return `${h12}:${tt.slice(3,5)} ${h >= 12 ? "PM" : "AM"}`; })()}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${s.cls}`}>
-                        {s.icon}{s.label}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      {!isCancelled && (
-                        <div className="flex gap-2">
-                          <button className="text-[11px] font-semibold px-3 py-1 rounded-lg border border-slate-200 text-slate-500 hover:border-emerald-300 hover:text-emerald-600 transition-all">
-                            View
-                          </button>
-                          {mappedStatus === "in-progress" && (
-                            <button
-                              onClick={() => {
-                                const params = new URLSearchParams({ patient_id: apt.patient_id, appointment_id: apt.id });
-                                window.location.href = `/prescriptions/new?${params}`;
-                              }}
-                              className="text-[11px] font-semibold px-3 py-1 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-all shadow-sm"
-                            >
-                              ✍️ Prescribe
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+              <DashboardApptRows appts={tabAppts} currentToken={stats.current_token ?? 0} />
             </tbody>
           </table>
           )}

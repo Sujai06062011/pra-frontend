@@ -1,11 +1,11 @@
 import {
   LayoutDashboard, CalendarDays, Users, Hash, Pill, FlaskConical,
   MessageCircle, Phone, Star, BarChart3, Settings, ChevronRight,
-  Stethoscope, LogOut, Tablets, UserPlus, CalendarPlus
+  Stethoscope, LogOut, Tablets, UserPlus, CalendarPlus, CalendarClock
 } from "lucide-react";
 
 export type Page =
-  | "dashboard" | "appointments" | "queue" | "patients"
+  | "dashboard" | "appointments" | "availability" | "queue" | "patients"
   | "prescriptions" | "medicines" | "lab" | "queries" | "followups"
   | "reviews" | "analytics" | "settings"
   | "new-appointment" | "register-patient" | "new-prescription";
@@ -18,6 +18,7 @@ const navSections: { label: string; items: NavItem[] }[] = [
     items: [
       { icon: <LayoutDashboard size={16} />, label: "Overview", page: "dashboard" },
       { icon: <CalendarDays size={16} />, label: "Appointments", page: "appointments", badgeColor: "teal" },
+      { icon: <CalendarClock size={16} />, label: "Availability", page: "availability" },
       { icon: <Hash size={16} />, label: "Queue", page: "queue" },
       { icon: <Users size={16} />, label: "Patients", page: "patients" },
     ],

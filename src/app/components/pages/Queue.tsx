@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ChevronRight, ChevronLeft, Clock, Users, CheckCircle2, Activity, RefreshCw } from "lucide-react";
+import { useState, useCallback } from "react";
+import { ChevronRight, ChevronLeft, Clock, Users, CheckCircle2, Activity, RefreshCw, AlertTriangle, UserX } from "lucide-react";
 import { useQueue } from "../../../hooks/usePRAData";
 import { api } from "../../../lib/api";
 import type { Appointment } from "../../../lib/api";
@@ -28,6 +28,140 @@ const fmtTime = (t?: string) => {
   return `${h12}:${t.slice(3, 5)} ${h >= 12 ? "PM" : "AM"}`;
 };
 
+function minutesSince(appointmentTime?: string): number {
+  if (!appointmentTime) return 0;
+  const now = new Date();
+  const [h, m] = appointmentTime.split(":").map(Number);
+  const scheduled = new Date(now);
+  scheduled.setHours(h, m, 0, 0);
+  return Math.max(0, Math.floor((now.getTime() - scheduled.getTime()) / 60000));
+}
+
+// Queue sort: In Progress → Waiting → No-Show → Done → Cancelled
+const Q_ORDER: Record<string, number> = {
+  "in-progress": 0,
+  waiting:       1,
+  done:          2,
+  "no-show":     3,
+  cancelled:     4,
+};
+
+function queueStatus(p: Appointment): string {
+  if (p.status === "Cancelled") return "cancelled";
+  if (p.status === "No-Show") return "no-show";
+  if (p.status === "In Progress" || p.queue_status === "In Progress") return "in-progress";
+  if (p.status === "Completed" || p.queue_status === "Done") return "done";
+  return "waiting";
+}
+
+function tokenNum(tok?: string | number | null): number {
+  const s = String(tok ?? ""); const m = s.match(/(\d+)$/); return m ? parseInt(m[1], 10) : 0;
+}
+
+function sortQueue(appts: Appointment[]): Appointment[] {
+  return [...appts].sort((a, b) => {
+    const sd = (Q_ORDER[queueStatus(a)] ?? 9) - (Q_ORDER[queueStatus(b)] ?? 9);
+    return sd !== 0 ? sd : tokenNum(a.display_token ?? a.token_number) - tokenNum(b.display_token ?? b.token_number);
+  });
+}
+
+// ── Toast ────────────────────────────────────────────────
+function Toast({ msg, onClose }: { msg: string; onClose: () => void }) {
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl text-[13px] font-semibold bg-amber-600 text-white">
+      <UserX size={15} /> {msg}
+      <button onClick={onClose} className="ml-2 opacity-70 hover:opacity-100 text-lg leading-none">×</button>
+    </div>
+  );
+}
+
+// ── No Show Modal ────────────────────────────────────────
+function NoShowModal({
+  appointment,
+  onConfirm,
+  onClose,
+  busy,
+}: {
+  appointment: Appointment;
+  onConfirm: (sendWhatsapp: boolean) => void;
+  onClose: () => void;
+  busy: boolean;
+}) {
+  const name = appointment.patients?.name ?? "Patient";
+  const mins = minutesSince(appointment.appointment_time);
+  const token = appointment.display_token || appointment.token_number || "—";
+  const time  = fmtTime(appointment.appointment_time);
+  const firstName = name.split(" ")[0];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-5 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center">
+              <AlertTriangle size={18} className="text-amber-600" />
+            </div>
+            <div>
+              <div className="text-[15px] font-bold text-slate-800">Mark as No Show?</div>
+              <div className="text-[12px] text-slate-500">This will log a follow-up call task</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Patient info */}
+        <div className="px-6 py-4 space-y-1">
+          <div className="text-[14px] font-semibold text-slate-800">{name}</div>
+          <div className="text-[12px] text-slate-500">
+            Token: <span className="font-semibold text-slate-700">{token}</span>
+            {time && <> · Scheduled: <span className="font-semibold text-slate-700">{time}</span></>}
+          </div>
+          {mins > 0 && (
+            <div className="inline-flex items-center gap-1.5 mt-1 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-700">
+              <Clock size={11} /> {mins} min{mins !== 1 ? "s" : ""} since scheduled time
+            </div>
+          )}
+        </div>
+
+        {/* WhatsApp preview */}
+        <div className="mx-6 mb-4 rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
+          <div className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">WhatsApp message preview</div>
+          <div className="text-[12px] text-slate-600 leading-relaxed">
+            Hi {firstName} 👋, we noticed you missed your appointment{time ? ` at ${time}` : ""} today. Please reply to reschedule at your convenience.
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="px-6 pb-5 flex flex-col gap-2">
+          <div className="flex gap-2">
+            <button
+              onClick={() => onConfirm(true)}
+              disabled={busy}
+              className="flex-1 px-4 py-2.5 rounded-xl bg-amber-500 text-white text-[13px] font-semibold hover:bg-amber-600 transition-colors disabled:opacity-60"
+            >
+              No Show + WhatsApp
+            </button>
+            <button
+              onClick={() => onConfirm(false)}
+              disabled={busy}
+              className="flex-1 px-4 py-2.5 rounded-xl border border-amber-300 text-amber-700 text-[13px] font-semibold hover:bg-amber-50 transition-colors disabled:opacity-60"
+            >
+              No Show Only
+            </button>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="w-full px-4 py-2 rounded-xl border border-slate-200 text-[13px] text-slate-500 hover:bg-slate-50 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── component ─────────────────────────────────────────────
 export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appointmentId: string) => void } = {}) {
   const { data, loading, error, refetch, setToken } = useQueue();
@@ -43,20 +177,23 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
 
+  // No Show state
+  const [noShowTarget, setNoShowTarget] = useState<Appointment | null>(null);
+  const [noShowBusy, setNoShowBusy] = useState(false);
+  const [justNoShowedIds, setJustNoShowedIds] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<string | null>(null);
+
+  // Optimistic overrides: id → "No-Show" so UI updates immediately
+  const [optimisticNoShows, setOptimisticNoShows] = useState<Set<string>>(new Set());
+
   const currentPatient = getCurrentAppointment(appointments);
   const firstPatient = getFirstAppointment(appointments);
   const allDone = isAllDone(appointments);
   const prevResult = currentPatient ? getPrevAppointment(currentPatient, appointments) : null;
 
-  // Next disabled only when everyone is done; Prev when there is nothing to go back to
   const isNextDisabled = loading || busy || allDone;
   const isPrevDisabled = loading || busy || !currentPatient || !prevResult;
 
-  // ── status transitions (uses existing endpoints) ────────
-  // PATCH /appointments/{id}/status + POST /queue/set-token via setToken().
-  // DB statuses: "Completed" = Done, "Confirmed" = Waiting.
-  // The most failure-prone write runs FIRST so a failure can't half-advance
-  // the queue; any error is surfaced and the list re-synced.
   const runTransition = async (steps: () => Promise<void>) => {
     setBusy(true);
     setActionError("");
@@ -64,7 +201,7 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
       await steps();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Queue update failed");
-      refetch(); // re-sync after partial failure
+      refetch();
     } finally {
       setBusy(false);
     }
@@ -74,13 +211,13 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
     runTransition(async () => {
       await api.appointments.updateStatus(target.id, "In Progress");
       if (previous) await api.appointments.updateStatus(previous.id, "Completed");
-      await setToken(target.token_number ?? 0); // syncs tokens table + refetches
+      await setToken(target.token_number ?? 0);
     });
 
   const revertToAppointment = (current: Appointment, prev: Appointment) =>
     runTransition(async () => {
-      await api.appointments.updateStatus(prev.id, "In Progress"); // Done → In Progress
-      await api.appointments.updateStatus(current.id, "Confirmed"); // back to Waiting
+      await api.appointments.updateStatus(prev.id, "In Progress");
+      await api.appointments.updateStatus(current.id, "Confirmed");
       await setToken(prev.token_number ?? 0);
     });
 
@@ -90,78 +227,114 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
       await setToken(0);
     });
 
-  // ── Next / Prev handlers ─────────────────────────────────
   const handleNext = async () => {
     const current = getCurrentAppointment(appointments);
-
-    // Start of day — no one In Progress yet
     if (!current) {
       const first = getFirstPendingAppointment(appointments);
       if (!first) return;
       await advanceToAppointment(first, null);
       return;
     }
-
     const next = getNextAppointment(current, appointments);
-
-    // Last patient finished — mark them done, day complete
-    if (!next) {
-      await finishLastPatient(current);
-      return;
-    }
-
+    if (!next) { await finishLastPatient(current); return; }
     if (next.crossSession && next.targetSession) {
       setPendingAction({ type: "next", targetAppointment: next.appointment, targetSession: next.targetSession });
       setShowSessionPopup(true);
       return;
     }
-
     await advanceToAppointment(next.appointment, current);
   };
 
   const handlePrev = async () => {
     const current = getCurrentAppointment(appointments);
     if (!current) return;
-
     const prev = getPrevAppointment(current, appointments);
-    if (!prev) return; // already at first patient (button disabled anyway)
-
+    if (!prev) return;
     if (prev.crossSession && prev.targetSession) {
       setPendingAction({ type: "prev", targetAppointment: prev.appointment, targetSession: prev.targetSession });
       setShowSessionPopup(true);
       return;
     }
-
     await revertToAppointment(current, prev.appointment);
   };
 
-  // ── session popup confirm/cancel ─────────────────────────
   const handleSessionConfirm = async () => {
     if (!pendingAction) return;
     const current = getCurrentAppointment(appointments);
-
     if (pendingAction.type === "next") {
       await advanceToAppointment(pendingAction.targetAppointment, current);
     } else if (current) {
       await revertToAppointment(current, pendingAction.targetAppointment);
     }
-
     setShowSessionPopup(false);
     setPendingAction(null);
   };
 
-  const handleSessionCancel = () => {
-    setShowSessionPopup(false);
-    setPendingAction(null);
-  };
+  const handleSessionCancel = () => { setShowSessionPopup(false); setPendingAction(null); };
+
+  // ── No Show confirm ──────────────────────────────────────
+  const handleNoShowConfirm = useCallback(async (sendWhatsapp: boolean) => {
+    if (!noShowTarget) return;
+    setNoShowBusy(true);
+    try {
+      const result = await api.appointments.noShow(noShowTarget.id, sendWhatsapp);
+      const token = noShowTarget.display_token || noShowTarget.token_number || "";
+      const name  = noShowTarget.patients?.name ?? "Patient";
+
+      // Optimistic update
+      setOptimisticNoShows(prev => new Set(prev).add(noShowTarget.id));
+
+      // Flash amber highlight
+      setJustNoShowedIds(new Set([noShowTarget.id]));
+      setTimeout(() => {
+        setJustNoShowedIds(new Set());
+        refetch();
+      }, 2000);
+
+      setNoShowTarget(null);
+      setToast(
+        result.whatsapp_sent
+          ? `${token} marked as No Show. WhatsApp sent to ${name}.`
+          : `${token} marked as No Show.`
+      );
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "No Show update failed");
+      setNoShowTarget(null);
+    } finally {
+      setNoShowBusy(false);
+    }
+  }, [noShowTarget, refetch]);
 
   const eveningWaitingCount = appointments.filter(p =>
     isEvening(p.appointment_time) &&
-    p.status !== "Cancelled" && p.status !== "Completed" && p.queue_status !== "Done"
+    p.status !== "Cancelled" && p.status !== "No-Show" && p.status !== "Completed" && p.queue_status !== "Done"
   ).length;
+
+  // Apply optimistic no-shows then sort
+  const displayAppointments = sortQueue(
+    appointments.map(p =>
+      optimisticNoShows.has(p.id) ? { ...p, status: "No-Show" as const } : p
+    )
+  );
+
+  // Waiting count excludes No-Show patients
+  const waitingCount = displayAppointments.filter(p => queueStatus(p) === "waiting").length;
 
   return (
     <div className="p-7 space-y-6">
+      {/* Toast */}
+      {toast && <Toast msg={toast} onClose={() => setToast(null)} />}
+
+      {/* No Show Modal */}
+      {noShowTarget && (
+        <NoShowModal
+          appointment={noShowTarget}
+          onConfirm={handleNoShowConfirm}
+          onClose={() => setNoShowTarget(null)}
+          busy={noShowBusy}
+        />
+      )}
+
       {error && (
         <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
           <span className="text-[13px] text-rose-700 flex-1">Failed to load queue data.</span>
@@ -243,7 +416,7 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
         {/* Stats */}
         <div className="col-span-2 grid grid-cols-2 gap-4">
           {[
-            { icon: <Users size={22} className="text-blue-600" />, label: "Waiting", value: loading ? "—" : data.waiting, sub: "patients in queue", bg: "bg-blue-50", border: "border-blue-100" },
+            { icon: <Users size={22} className="text-blue-600" />, label: "Waiting", value: loading ? "—" : waitingCount, sub: "patients in queue", bg: "bg-blue-50", border: "border-blue-100" },
             { icon: <Clock size={22} className="text-amber-600" />, label: "Avg Wait Time", value: "—", sub: "current estimate", bg: "bg-amber-50", border: "border-amber-100" },
             { icon: <CheckCircle2 size={22} className="text-emerald-600" />, label: "Completed", value: loading ? "—" : data.completed, sub: "today so far", bg: "bg-emerald-50", border: "border-emerald-100" },
             { icon: <Activity size={22} className="text-violet-600" />, label: "Total Tokens", value: loading ? "—" : data.total_today, sub: "issued today", bg: "bg-violet-50", border: "border-violet-100" },
@@ -273,23 +446,32 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
           <div className="px-5 py-8 text-center text-[13px] text-slate-400">No appointments today</div>
         ) : (
           <div className="divide-y divide-slate-50">
-            {appointments.map((p, idx) => {
-              const isCancelled = p.status === "Cancelled";
-              const isCurrent = p.queue_status === "In Progress" && !isCancelled;
-              const isDone = p.queue_status === "Done" && !isCancelled;
+            {displayAppointments.map((p, idx) => {
+              const qs = queueStatus(p);
+              const isCancelled = qs === "cancelled";
+              const isNoShow    = qs === "no-show";
+              const isCurrent   = qs === "in-progress";
+              const isDone      = qs === "done";
+              const isWaiting   = qs === "waiting";
+              const isFlashing  = justNoShowedIds.has(p.id);
               const color = avatarColors[idx % avatarColors.length];
               const name = p.patients?.name || "Unknown";
+
               return (
                 <div
                   key={p.id}
+                  style={{ transition: "background-color 0.4s ease-in-out" }}
                   className={`flex items-center gap-4 px-5 py-3.5 transition-colors ${
-                    isCancelled ? "opacity-40" :
+                    isFlashing  ? "bg-amber-100" :
+                    isCancelled ? "opacity-40 bg-white" :
+                    isNoShow    ? "bg-amber-50/60" :
                     isCurrent   ? "bg-emerald-50" : "hover:bg-slate-50"
                   }`}
                 >
                   {/* Token number */}
                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[14px] font-bold flex-shrink-0 ${
                     isCancelled ? "bg-slate-200 text-slate-400" :
+                    isNoShow    ? "bg-amber-100 text-amber-500" :
                     isCurrent   ? "bg-emerald-500 text-white shadow-sm shadow-emerald-200" :
                     isDone      ? "bg-slate-100 text-slate-400" :
                                   "bg-slate-100 text-slate-600"
@@ -298,7 +480,7 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
                   </div>
 
                   {/* Avatar */}
-                  <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center text-white text-[13px] font-bold shadow-sm flex-shrink-0`}>
+                  <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center text-white text-[13px] font-bold shadow-sm flex-shrink-0 ${(isCancelled || isNoShow) ? "opacity-50" : ""}`}>
                     {name[0]}
                   </div>
 
@@ -321,19 +503,24 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
                   </div>
 
                   {/* Badge / actions */}
-                  <div>
+                  <div className="flex items-center gap-2">
                     {isCancelled && (
                       <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-rose-50 text-rose-600 border border-rose-200">
                         Cancelled
                       </span>
                     )}
-                    {!isCancelled && isDone && (
+                    {isNoShow && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                        <UserX size={11} /> No Show
+                      </span>
+                    )}
+                    {!isCancelled && !isNoShow && isDone && (
                       <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                         <CheckCircle2 size={11} /> Seen
                       </span>
                     )}
-                    {!isCancelled && isCurrent && (
-                      <div className="flex items-center gap-2">
+                    {!isCancelled && !isNoShow && isCurrent && (
+                      <>
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                           <Activity size={11} /> In Progress
                         </span>
@@ -346,12 +533,20 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
                         >
                           ✍️ Prescribe
                         </button>
-                      </div>
+                      </>
                     )}
-                    {!isCancelled && !isDone && !isCurrent && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                        <Clock size={11} /> Waiting
-                      </span>
+                    {isWaiting && (
+                      <>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                          <Clock size={11} /> Waiting
+                        </span>
+                        <button
+                          onClick={() => setNoShowTarget(p)}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-orange-300 text-orange-600 hover:bg-orange-50 transition-colors"
+                        >
+                          <UserX size={11} /> No Show
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>

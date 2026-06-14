@@ -21,9 +21,9 @@ const isDone = (a: Appointment): boolean =>
 const isInProgress = (a: Appointment): boolean =>
   a.status === "In Progress" || a.queue_status === "In Progress";
 
-/** All active (non-cancelled) appointments sorted by slot time */
+/** All active (non-cancelled, non-no-show) appointments sorted by slot time */
 export const getActiveAppointments = (appointments: Appointment[]): Appointment[] =>
-  appointments.filter(a => a.status !== "Cancelled").sort(byTime);
+  appointments.filter(a => a.status !== "Cancelled" && a.status !== "No-Show").sort(byTime);
 
 /** The appointment currently being served */
 export const getCurrentAppointment = (appointments: Appointment[]): Appointment | null =>

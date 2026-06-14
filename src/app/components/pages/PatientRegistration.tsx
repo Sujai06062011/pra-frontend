@@ -92,7 +92,8 @@ export function PatientRegistration({
   onBookAppointment?: (patientId: string) => void;
 } = {}) {
   const [step, setStep] = useState<Step>("lookup");
-  const [mobile, setMobile] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [mobile, setMobile] = useState(""); // kept for registration form
   const [searching, setSearching] = useState(false);
   const [lookupResult, setLookupResult] = useState<Patient[] | null>(null);
   const [lookupError, setLookupError] = useState("");
@@ -113,15 +114,24 @@ export function PatientRegistration({
   const age = calcAge(dob);
 
   const handleLookup = async () => {
-    const m = mobile.trim().replace(/\s/g, "");
-    if (!m) { setLookupError("Enter a mobile number"); return; }
+    const q = searchQuery.trim();
+    if (!q) { setLookupError("Enter a name, mobile number, or patient code"); return; }
     setLookupError("");
     setSearching(true);
     try {
-      const results = await api.patients.lookup(m);
+      const isPhoneSearch = /^\d[\d\s\-+()]{6,}$/.test(q);
+      let results: Patient[];
+      if (isPhoneSearch) {
+        const digits = q.replace(/\D/g, "");
+        results = await api.patients.lookup(digits);
+        setMobile(digits); // pre-fill for registration
+      } else {
+        results = await api.patients.list(DOCTOR_ID, q);
+        setMobile(""); // clear mobile since we searched by name/code
+      }
       setLookupResult(results);
     } catch {
-      setLookupError("Lookup failed. Please try again.");
+      setLookupError("Search failed. Please try again.");
     } finally {
       setSearching(false);
     }
@@ -161,7 +171,7 @@ export function PatientRegistration({
   };
 
   const resetForm = () => {
-    setMobile("");
+    setSearchQuery(""); setMobile("");
     setLookupResult(null);
     setName(""); setDob(""); setGender(""); setLanguage(""); setEmail(""); setCity(""); setRelationship("");
     setFamilyHead(null);
@@ -180,23 +190,23 @@ export function PatientRegistration({
               <h2 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 22 }} className="text-slate-800 mb-1">
                 Register Patient
               </h2>
-              <p className="text-[13px] text-slate-500 mb-7">Enter mobile number to check if patient already exists</p>
+              <p className="text-[13px] text-slate-500 mb-7">Search by mobile number, name, or patient code</p>
 
               <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                Mobile Number
+                Search Patient
               </label>
-              <div className="flex gap-2 mb-4">
-                <div className="flex items-center px-3 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-semibold text-slate-600 flex-shrink-0">
-                  <Phone size={13} className="mr-1.5 text-slate-400" /> +91
+              <div className="flex gap-2 mb-1">
+                <div className="relative flex-1">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={searchQuery}
+                    onChange={e => { setSearchQuery(e.target.value); setLookupResult(null); }}
+                    onKeyDown={e => e.key === "Enter" && handleLookup()}
+                    placeholder="Mobile number, name or patient code…"
+                    className="w-full pl-9 pr-4 py-2.5 text-[14px] border border-slate-200 rounded-xl text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400"
+                    autoFocus
+                  />
                 </div>
-                <input
-                  value={mobile}
-                  onChange={e => { setMobile(e.target.value); setLookupResult(null); }}
-                  onKeyDown={e => e.key === "Enter" && handleLookup()}
-                  placeholder="99999 99999"
-                  className="flex-1 px-4 py-2.5 text-[14px] border border-slate-200 rounded-xl text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400"
-                  maxLength={15}
-                />
                 <button
                   onClick={handleLookup}
                   disabled={searching}
@@ -210,15 +220,35 @@ export function PatientRegistration({
                   Search
                 </button>
               </div>
+              <p className="text-[11px] text-slate-400 mb-3 mt-1">Tip: type digits only for mobile lookup · type letters to search by name or code</p>
               {lookupError && <p className="text-[12px] text-rose-600 mb-3">{lookupError}</p>}
 
               {/* Results */}
               {lookupResult !== null && lookupResult.length === 0 && (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 mt-2">
                   <div className="flex items-center gap-2 text-emerald-700 font-semibold text-[14px] mb-1">
-                    <CheckCircle2 size={16} /> Mobile not registered
+                    <CheckCircle2 size={16} /> No patient found
                   </div>
-                  <p className="text-[13px] text-emerald-600 mb-4">This is a new patient.</p>
+                  <p className="text-[13px] text-emerald-600 mb-4">
+                    {mobile ? "This mobile number is not registered." : "No matching patient found."} Register as a new patient?
+                  </p>
+                  {!mobile && (
+                    <div className="mb-3">
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Mobile Number (required to register)</label>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-semibold text-slate-600 flex-shrink-0">
+                          <Phone size={13} className="mr-1.5 text-slate-400" /> +91
+                        </div>
+                        <input
+                          value={mobile}
+                          onChange={e => setMobile(e.target.value)}
+                          placeholder="99999 99999"
+                          className="flex-1 px-4 py-2 text-[13px] border border-slate-200 rounded-xl text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400"
+                          maxLength={15}
+                        />
+                      </div>
+                    </div>
+                  )}
                   <button
                     onClick={() => setStep("new-patient")}
                     className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-[13px] font-semibold rounded-xl transition-colors"
@@ -231,30 +261,35 @@ export function PatientRegistration({
               {lookupResult !== null && lookupResult.length > 0 && (
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mt-2 space-y-3">
                   <div className="flex items-center gap-2 text-blue-700 font-semibold text-[13px]">
-                    <Users size={15} /> Found {lookupResult.length} patient(s) with this number
+                    <Users size={15} /> Found {lookupResult.length} patient{lookupResult.length !== 1 ? "s" : ""}
                   </div>
                   {lookupResult.map(p => (
-                    <div key={p.id} className="bg-white border border-blue-100 rounded-xl px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white font-bold text-[13px] flex-shrink-0">
-                          {p.name[0]}
-                        </div>
-                        <div>
-                          <div className="text-[13px] font-semibold text-slate-800">{p.name}</div>
-                          <div className="text-[11px] text-slate-400">
-                            {p.patient_code && <span className="font-semibold text-violet-600">{p.patient_code} · </span>}
-                            {p.age ? `${p.age} yrs · ` : ""}
-                            {p.gender === "Male" || p.gender === "M" ? "Male" : p.gender === "Female" || p.gender === "F" ? "Female" : p.gender}
-                          </div>
-                        </div>
+                    <div key={p.id} className="bg-white border border-blue-100 rounded-xl px-4 py-3 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white font-bold text-[13px] flex-shrink-0">
+                        {p.name[0]}
                       </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] font-semibold text-slate-800">{p.name}</div>
+                        <div className="text-[11px] text-slate-400">
+                          {p.patient_code && <span className="font-semibold text-violet-600">{p.patient_code} · </span>}
+                          {p.age ? `${p.age} yrs · ` : ""}
+                          {p.gender === "Male" || p.gender === "M" ? "Male" : p.gender === "Female" || p.gender === "F" ? "Female" : p.gender}
+                        </div>
+                        {p.mobile && <div className="text-[11px] text-slate-400 mt-0.5">{p.mobile}</div>}
+                      </div>
+                      <button
+                        onClick={() => { setFamilyHead(p); if (p.mobile) setMobile(p.mobile.replace(/\D/g, "")); setStep("family-member"); }}
+                        className="flex-shrink-0 px-3 py-1.5 border border-blue-300 text-blue-600 text-[11px] font-semibold rounded-lg hover:bg-blue-50 transition-colors whitespace-nowrap"
+                      >
+                        + Add Family
+                      </button>
                     </div>
                   ))}
                   <button
-                    onClick={() => { setFamilyHead(lookupResult[0]); setStep("family-member"); }}
-                    className="w-full py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-[13px] font-semibold rounded-xl transition-colors"
+                    onClick={() => { setFamilyHead(null); setLookupResult(null); setStep("new-patient"); }}
+                    className="w-full py-2.5 border border-emerald-400 text-emerald-600 text-[13px] font-semibold rounded-xl hover:bg-emerald-50 transition-colors"
                   >
-                    + Add Family Member to this number
+                    + Register as New Patient
                   </button>
                   <button
                     onClick={() => { setMobile(""); setLookupResult(null); }}
@@ -273,10 +308,28 @@ export function PatientRegistration({
               <h2 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 22 }} className="text-slate-800 mb-1">
                 New Patient Details
               </h2>
-              <div className="flex items-center gap-2 text-[13px] text-slate-500 mb-7">
-                <Phone size={13} className="text-emerald-500" />
-                Mobile: <span className="font-semibold text-slate-700">+91 {mobile}</span>
-              </div>
+              {mobile ? (
+                <div className="flex items-center gap-2 text-[13px] text-slate-500 mb-7">
+                  <Phone size={13} className="text-emerald-500" />
+                  Mobile: <span className="font-semibold text-slate-700">+91 {mobile}</span>
+                </div>
+              ) : (
+                <div className="mb-7">
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Mobile Number *</label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[13px] font-semibold text-slate-600 flex-shrink-0">
+                      <Phone size={13} className="mr-1.5 text-slate-400" /> +91
+                    </div>
+                    <input
+                      value={mobile}
+                      onChange={e => setMobile(e.target.value)}
+                      placeholder="99999 99999"
+                      className="flex-1 px-4 py-2 text-[13px] border border-slate-200 rounded-xl text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400"
+                      maxLength={15}
+                    />
+                  </div>
+                </div>
+              )}
 
               <PatientForm
                 name={name} setName={setName}

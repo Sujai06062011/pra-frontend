@@ -4,6 +4,7 @@ import type { Page } from "./Sidebar";
 const pageTitles: Record<Page, string> = {
   dashboard: "Overview",
   appointments: "Appointments",
+  availability: "Availability Management",
   queue: "Live Queue",
   patients: "Patients",
   prescriptions: "Prescriptions",

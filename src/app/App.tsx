@@ -18,6 +18,7 @@ import { ClinicMedicines } from "./components/pages/ClinicMedicines";
 import { NewAppointment } from "./components/pages/NewAppointment";
 import { PatientRegistration } from "./components/pages/PatientRegistration";
 import { PrescriptionWriter } from "./components/pages/PrescriptionWriter";
+import { Availability } from "./components/pages/Availability";
 
 export default function App() {
   const [activePage, setActivePage] = useState<Page>("dashboard");
@@ -28,7 +29,7 @@ export default function App() {
   const { data: todayAppointments } = useTodayAppointments();
   const queriesBadge = queries.filter(q => q.status === "Pending").length;
   const followupsBadge = followUps.filter(f => !f.completed_at).length;
-  const appointmentsBadge = todayAppointments.length;
+  const appointmentsBadge = todayAppointments.filter(a => a.status !== "Cancelled").length;
 
   const goToNewAppt = (patientId = "") => {
     setNewApptPatientId(patientId);
@@ -39,6 +40,7 @@ export default function App() {
     switch (activePage) {
       case "dashboard": return <Dashboard onNavigate={setActivePage} />;
       case "appointments": return <Appointments onPrescribe={(patientId, appointmentId) => { setRxParams({ patientId, appointmentId }); setActivePage("new-prescription"); }} />;
+      case "availability": return <Availability />;
       case "queue": return <Queue onPrescribe={(patientId, appointmentId) => { setRxParams({ patientId, appointmentId }); setActivePage("new-prescription"); }} />;
       case "patients": return <Patients />;
       case "prescriptions": return (
