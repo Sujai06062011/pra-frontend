@@ -550,12 +550,12 @@ export function Settings() {
         <SectionHeader icon={<Clock size={16} className="text-blue-600" />} title="Scheduler Timings (IST)" color="bg-blue-50" />
         <div className="grid grid-cols-2 gap-4">
           {[
-            "scheduler.visit_summary_time",
-            "scheduler.morning_reminder_time",
-            "scheduler.evening_reminder_time",
-            "scheduler.followup_whatsapp_time",
-            "scheduler.followup_calls_time",
-            "scheduler.review_request_time",
+            "scheduler.visit_summary.time",
+            "scheduler.morning_reminders.time",
+            "scheduler.evening_reminders.time",
+            "scheduler.followup_whatsapp.time",
+            "scheduler.followup_calls.time",
+            "scheduler.review_requests.time",
           ].map(key => {
             const r = schedulerRows.find(row => row.config_key === key);
             return r ? <ConfigField key={r.config_key} row={r} onChange={handleChange} /> : null;
