@@ -230,6 +230,7 @@ export interface ClinicScheduleSession {
 
 export interface ClinicScheduleDay {
   enabled: boolean;
+  slot_duration_minutes: number;
   morning: ClinicScheduleSession;
   evening: ClinicScheduleSession;
 }
@@ -242,16 +243,12 @@ export interface ClinicScheduleBoundaries {
 }
 
 export interface ClinicScheduleResponse {
-  slot_duration_minutes: number;
-  max_per_slot: number;
   boundaries: ClinicScheduleBoundaries;
   schedule: Record<string, ClinicScheduleDay>;
 }
 
 export interface ClinicSchedulePutPayload {
   doctor_id: string;
-  slot_duration_minutes: number;
-  max_per_slot: number;
   schedule: Record<string, ClinicScheduleDay>;
 }
 

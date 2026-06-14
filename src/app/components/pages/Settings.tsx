@@ -176,83 +176,43 @@ function TimeDropdown({
 }) {
   return (
     <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
-      className="px-2.5 py-1.5 text-[12px] border border-slate-200 rounded-lg text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed min-w-[96px]">
+      className="px-2 py-1 text-[12px] border border-slate-200 rounded-lg text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed min-w-[88px]">
       {options.map(o => <option key={o} value={o}>{fmt12(o)}</option>)}
     </select>
   );
 }
 
-function SessionRow({
-  label, icon, session, boundary, duration, onChange, disabled,
-}: {
-  label: string;
-  icon: React.ReactNode;
-  session: ClinicScheduleSession;
-  boundary: { start: string; end: string };
-  duration: number;
-  onChange: (updates: Partial<ClinicScheduleSession>) => void;
-  disabled?: boolean;
-}) {
-  const startOpts = genTimeOptions(boundary.start, boundary.end, duration).slice(0, -1);
-  const endOpts = genTimeOptions(boundary.start, boundary.end, duration).filter(o => o > session.start);
-
-  const startOutOfBounds = session.enabled && session.start < boundary.start;
-  const endOutOfBounds = session.enabled && session.end > boundary.end;
-  const hasError = startOutOfBounds || endOutOfBounds;
-
-  return (
-    <div className={`flex flex-col gap-1.5 ${disabled ? "opacity-40 pointer-events-none" : ""}`}>
-      <div className="flex items-center gap-2">
-        {icon}
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</span>
-        <button type="button"
-          onClick={() => onChange({ enabled: !session.enabled })}
-          className={`ml-auto px-2.5 py-0.5 rounded-lg text-[11px] font-semibold border transition-colors ${
-            session.enabled
-              ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-              : "bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200"
-          }`}>
-          {session.enabled ? "On" : "Off"}
-        </button>
-      </div>
-      {session.enabled ? (
-        <div className="flex items-center gap-2 flex-wrap">
-          <TimeDropdown value={session.start} onChange={v => onChange({ start: v })} options={startOpts} />
-          <span className="text-[11px] text-slate-400">–</span>
-          <TimeDropdown value={session.end} onChange={v => onChange({ end: v })} options={endOpts} />
-          {hasError && (
-            <span className="text-[11px] text-rose-500">
-              Cannot exceed clinic hours {fmt12(boundary.start)}–{fmt12(boundary.end)}
-            </span>
-          )}
-        </div>
-      ) : (
-        <span className="text-[11px] text-slate-400 pl-1">Not available</span>
-      )}
-    </div>
-  );
-}
+const FULL_DAY_START = "06:00";
+const FULL_DAY_END   = "23:30";
 
 function DayRow({
-  dayMeta, dayData, boundaries, duration, onChange, onCopyToWeekdays,
+  dayMeta, dayData, onChange, onCopyToWeekdays,
 }: {
   dayMeta: typeof DAYS_META[0];
   dayData: ClinicScheduleDay;
-  boundaries: ClinicScheduleResponse["boundaries"];
-  duration: number;
   onChange: (updates: Partial<ClinicScheduleDay> | { morning?: Partial<ClinicScheduleSession>; evening?: Partial<ClinicScheduleSession> }) => void;
   onCopyToWeekdays: () => void;
 }) {
   const isWeekday = !["saturday", "sunday"].includes(dayMeta.key);
+  const dur = dayData.slot_duration_minutes || 10;
+
+  const allOpts    = genTimeOptions(FULL_DAY_START, FULL_DAY_END, dur);
+  const mStartOpts = allOpts.slice(0, -1);
+  const mEndOpts   = allOpts.filter(o => o > dayData.morning.start);
+  const eStartOpts = allOpts.slice(0, -1);
+  const eEndOpts   = allOpts.filter(o => o > dayData.evening.start);
+
+  const updateSession = (session: "morning" | "evening", patch: Partial<ClinicScheduleSession>) =>
+    onChange({ [session]: { ...dayData[session], ...patch } });
 
   return (
-    <div className={`rounded-xl border p-3.5 transition-all ${dayData.enabled ? "bg-white border-slate-100" : "bg-slate-50 border-slate-100"}`}>
-      {/* Row header */}
-      <div className="flex items-center gap-3 mb-3">
-        <span className="text-[13px] font-bold text-slate-700 w-9">{dayMeta.label}</span>
+    <div className={`rounded-xl border transition-all ${dayData.enabled ? "bg-white border-slate-100" : "bg-slate-50/60 border-slate-100"}`}>
+      {/* Header row */}
+      <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+        <span className="text-[13px] font-bold text-slate-700 w-8 shrink-0">{dayMeta.label}</span>
         <button type="button"
           onClick={() => onChange({ enabled: !dayData.enabled })}
-          className={`px-3 py-1 rounded-lg text-[12px] font-semibold border transition-colors ${
+          className={`px-2.5 py-0.5 rounded-lg text-[11px] font-semibold border transition-colors ${
             dayData.enabled
               ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
               : "bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100"
@@ -260,36 +220,86 @@ function DayRow({
           {dayData.enabled ? "Open" : "Closed"}
         </button>
 
-        {dayData.enabled && isWeekday && (
-          <button type="button" onClick={onCopyToWeekdays}
-            className="ml-auto flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-emerald-600 transition-colors">
-            <Copy size={11} /> Copy to all weekdays
-          </button>
-        )}
-        {dayData.enabled && !isWeekday && (
-          <span className="ml-auto text-[11px] text-slate-400">{dayMeta.full}</span>
+        {dayData.enabled && (
+          <>
+            {/* Slot duration per day */}
+            <div className="flex items-center gap-1 ml-3">
+              <Clock size={11} className="text-slate-400" />
+              <select
+                value={dur}
+                onChange={e => onChange({ slot_duration_minutes: Number(e.target.value) })}
+                className="px-2 py-0.5 text-[11px] border border-slate-200 rounded-lg text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-300"
+              >
+                {[5, 10, 15, 20, 30].map(v => <option key={v} value={v}>{v} min</option>)}
+              </select>
+            </div>
+
+            {isWeekday && (
+              <button type="button" onClick={onCopyToWeekdays}
+                className="ml-auto flex items-center gap-1 text-[11px] text-slate-400 hover:text-emerald-600 transition-colors">
+                <Copy size={10} /> Copy to weekdays
+              </button>
+            )}
+          </>
         )}
       </div>
 
       {dayData.enabled ? (
-        <div className="grid grid-cols-2 gap-4 pl-12">
-          <SessionRow
-            label="Morning" icon={<Sun size={12} className="text-amber-500" />}
-            session={dayData.morning}
-            boundary={{ start: boundaries.morning_start, end: boundaries.morning_end }}
-            duration={duration}
-            onChange={updates => onChange({ morning: { ...dayData.morning, ...updates } })}
-          />
-          <SessionRow
-            label="Evening" icon={<Moon size={12} className="text-indigo-500" />}
-            session={dayData.evening}
-            boundary={{ start: boundaries.evening_start, end: boundaries.evening_end }}
-            duration={duration}
-            onChange={updates => onChange({ evening: { ...dayData.evening, ...updates } })}
-          />
+        <div className="border-t border-slate-50 px-3.5 pb-2.5 pt-2 space-y-2">
+          {/* Morning row */}
+          <div className="flex items-center gap-2">
+            <Sun size={11} className="text-amber-400 shrink-0" />
+            <span className="text-[11px] text-slate-500 w-14 shrink-0">Morning</span>
+            <button type="button"
+              onClick={() => updateSession("morning", { enabled: !dayData.morning.enabled })}
+              className={`px-2 py-0.5 rounded text-[10px] font-semibold border mr-1 transition-colors ${
+                dayData.morning.enabled
+                  ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                  : "bg-slate-100 text-slate-400 border-slate-200"
+              }`}>
+              {dayData.morning.enabled ? "On" : "Off"}
+            </button>
+            {dayData.morning.enabled ? (
+              <>
+                <TimeDropdown value={dayData.morning.start} options={mStartOpts}
+                  onChange={v => updateSession("morning", { start: v })} />
+                <span className="text-[11px] text-slate-400">–</span>
+                <TimeDropdown value={dayData.morning.end} options={mEndOpts.length ? mEndOpts : [dayData.morning.end]}
+                  onChange={v => updateSession("morning", { end: v })} />
+              </>
+            ) : (
+              <span className="text-[11px] text-slate-400">Not available</span>
+            )}
+          </div>
+
+          {/* Evening row */}
+          <div className="flex items-center gap-2">
+            <Moon size={11} className="text-indigo-400 shrink-0" />
+            <span className="text-[11px] text-slate-500 w-14 shrink-0">Evening</span>
+            <button type="button"
+              onClick={() => updateSession("evening", { enabled: !dayData.evening.enabled })}
+              className={`px-2 py-0.5 rounded text-[10px] font-semibold border mr-1 transition-colors ${
+                dayData.evening.enabled
+                  ? "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
+                  : "bg-slate-100 text-slate-400 border-slate-200"
+              }`}>
+              {dayData.evening.enabled ? "On" : "Off"}
+            </button>
+            {dayData.evening.enabled ? (
+              <>
+                <TimeDropdown value={dayData.evening.start} options={eStartOpts}
+                  onChange={v => updateSession("evening", { start: v })} />
+                <span className="text-[11px] text-slate-400">–</span>
+                <TimeDropdown value={dayData.evening.end} options={eEndOpts.length ? eEndOpts : [dayData.evening.end]}
+                  onChange={v => updateSession("evening", { end: v })} />
+              </>
+            ) : (
+              <span className="text-[11px] text-slate-400">Not available</span>
+            )}
+          </div>
         </div>
       ) : (
-        <p className="pl-12 text-[12px] text-slate-400">Clinic closed on {dayMeta.full}s</p>
+        <p className="px-3.5 pb-2.5 text-[11px] text-slate-400">Closed — no appointments</p>
       )}
     </div>
   );
@@ -314,12 +324,6 @@ function WeeklyScheduleSection() {
       .finally(() => setLoading(false));
   }, []);
 
-  const updateLocal = (updates: Partial<ClinicScheduleResponse>) => {
-    if (!local) return;
-    setLocal({ ...local, ...updates });
-    setSaveState("idle");
-  };
-
   const updateDay = (dayKey: string, updates: Partial<ClinicScheduleDay>) => {
     if (!local) return;
     setLocal({
@@ -336,6 +340,7 @@ function WeeklyScheduleSection() {
     ["monday","tuesday","wednesday","thursday","friday"].forEach(d => {
       newSchedule[d] = {
         ...newSchedule[d],
+        slot_duration_minutes: src.slot_duration_minutes,
         morning: { ...src.morning },
         evening: { ...src.evening },
       };
@@ -352,12 +357,7 @@ function WeeklyScheduleSection() {
       const r = await fetch(`${API_BASE}/clinic/schedule`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          doctor_id: DOCTOR_ID,
-          slot_duration_minutes: local.slot_duration_minutes,
-          max_per_slot: local.max_per_slot,
-          schedule: local.schedule,
-        }),
+        body: JSON.stringify({ doctor_id: DOCTOR_ID, schedule: local.schedule }),
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
@@ -378,14 +378,14 @@ function WeeklyScheduleSection() {
   const handleReset = () => {
     if (!confirmReset) { setConfirmReset(true); return; }
     if (!local) return;
-    const b = local.boundaries;
     const newSchedule: Record<string, ClinicScheduleDay> = {};
     DAYS_META.forEach(({ key }) => {
       const open = key !== "sunday";
       newSchedule[key] = {
         enabled: open,
-        morning: { enabled: open, start: b.morning_start, end: b.morning_end },
-        evening: { enabled: open, start: b.evening_start, end: b.evening_end },
+        slot_duration_minutes: 10,
+        morning: { enabled: open, start: "09:30", end: "13:30" },
+        evening: { enabled: open, start: "17:30", end: "21:30" },
       };
     });
     setLocal({ ...local, schedule: newSchedule });
@@ -416,43 +416,6 @@ function WeeklyScheduleSection() {
         Set default clinic hours per day. These apply to all future dates unless overridden in Availability.
       </p>
 
-      {/* Global settings */}
-      <div className="flex items-center gap-6 mb-5 p-4 bg-slate-50 rounded-xl border border-slate-100">
-        <div>
-          <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Slot Duration</label>
-          <div className="flex items-center gap-2">
-            <select
-              value={local.slot_duration_minutes}
-              onChange={e => updateLocal({ slot_duration_minutes: Number(e.target.value) })}
-              className="px-3 py-1.5 text-[13px] border border-slate-200 rounded-xl text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
-            >
-              {[5, 10, 15, 20, 30].map(v => <option key={v} value={v}>{v}</option>)}
-            </select>
-            <span className="text-[12px] text-slate-500">minutes</span>
-          </div>
-        </div>
-        <div>
-          <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Max Per Slot</label>
-          <div className="flex items-center gap-2">
-            <select
-              value={local.max_per_slot}
-              onChange={e => updateLocal({ max_per_slot: Number(e.target.value) })}
-              className="px-3 py-1.5 text-[13px] border border-slate-200 rounded-xl text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
-            >
-              {[1,2,3,4,5,6,7,8,9,10].map(v => <option key={v} value={v}>{v}</option>)}
-            </select>
-            <span className="text-[12px] text-slate-500">bookings</span>
-          </div>
-        </div>
-        <div className="text-[11px] text-slate-400 ml-auto leading-relaxed">
-          Boundary hours<br />
-          <span className="font-semibold text-slate-600">
-            Morning {fmt12(local.boundaries.morning_start)}–{fmt12(local.boundaries.morning_end)}<br />
-            Evening {fmt12(local.boundaries.evening_start)}–{fmt12(local.boundaries.evening_end)}
-          </span>
-        </div>
-      </div>
-
       {/* Per-day rows */}
       <div className="space-y-2">
         {DAYS_META.map(dm => (
@@ -460,8 +423,6 @@ function WeeklyScheduleSection() {
             key={dm.key}
             dayMeta={dm}
             dayData={local.schedule[dm.key]}
-            boundaries={local.boundaries}
-            duration={local.slot_duration_minutes}
             onChange={updates => updateDay(dm.key, updates as Partial<ClinicScheduleDay>)}
             onCopyToWeekdays={() => copyToWeekdays(dm.key)}
           />
