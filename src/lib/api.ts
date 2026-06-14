@@ -21,8 +21,8 @@ export interface Appointment {
   appointment_time?: string;
   token_number?: number;
   display_token?: string | null;
-  queue_status?: "Waiting" | "In Progress" | "Done" | "Cancelled";
-  status: "Confirmed" | "In Progress" | "Completed" | "Cancelled";
+  queue_status?: "Waiting" | "In Progress" | "Done" | "Cancelled" | "No-Show";
+  status: "Confirmed" | "In Progress" | "Completed" | "Cancelled" | "No-Show";
   patients?: Patient;
   created_at: string;
 }
@@ -192,10 +192,73 @@ export interface PatientRegistrationPayload {
 export interface SlotInfo {
   time: string;
   display: string;
+  session: "morning" | "evening";
   booked_count: number;
   max: number;
   past?: boolean;
   available: boolean;
+}
+
+export interface SlotsResponse {
+  is_holiday: boolean;
+  holiday_name: string | null;
+  morning_enabled: boolean;
+  evening_enabled: boolean;
+  slots: SlotInfo[];
+}
+
+export interface AvailabilitySession {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+export interface AvailabilityInfo {
+  date: string;
+  is_holiday: boolean;
+  holiday_name: string | null;
+  has_override: boolean;
+  morning: AvailabilitySession;
+  evening: AvailabilitySession;
+}
+
+export interface DaySchedule {
+  day_of_week: string;
+  is_closed: boolean;
+  morning_enabled: boolean;
+  morning_start: string;
+  morning_end: string;
+  evening_enabled: boolean;
+  evening_start: string;
+  evening_end: string;
+  has_override: boolean;
+}
+
+export interface ScheduleDayPayload {
+  doctor_id: string;
+  day_of_week: string;
+  is_closed: boolean;
+  morning_enabled: boolean;
+  morning_start: string | null;
+  morning_end: string | null;
+  evening_enabled: boolean;
+  evening_start: string | null;
+  evening_end: string | null;
+}
+
+export interface AvailabilityPayload {
+  doctor_id: string;
+  availability_date: string;
+  is_holiday?: boolean;
+  holiday_name?: string | null;
+  morning_enabled?: boolean;
+  morning_start?: string | null;
+  morning_end?: string | null;
+  evening_enabled?: boolean;
+  evening_start?: string | null;
+  evening_end?: string | null;
+  reason?: string | null;
+  created_by?: string | null;
 }
 
 export interface BookAppointmentPayload {
@@ -299,11 +362,21 @@ export const api = {
         body: JSON.stringify({ status }),
       }),
     slots: (doctorId: string, date: string) =>
-      req<SlotInfo[]>(`/appointments/slots?doctor_id=${doctorId}&date=${date}`),
+      req<SlotsResponse>(`/appointments/slots?doctor_id=${doctorId}&date=${date}`),
     nextToken: (doctorId: string, date: string) =>
       req<{ token: number }>(`/appointments/next-token?doctor_id=${doctorId}&date=${date}`),
     book: (data: BookAppointmentPayload) =>
       req<BookingResult>("/appointments/book", { method: "POST", body: JSON.stringify(data) }),
+    noShow: (id: string, send_whatsapp: boolean) =>
+      req<{ success: boolean; appointment_id: string; status: string; whatsapp_sent: boolean; followup_created: boolean }>(
+        `/appointments/${id}/no-show`,
+        { method: "POST", body: JSON.stringify({ send_whatsapp }) }
+      ),
+    bulkCancel: (appointment_ids: string[], reason = "doctor_unavailable", notify_whatsapp = true) =>
+      req<{ cancelled: string[]; failed: string[]; whatsapp_sent: number; whatsapp_failed: number }>(
+        "/appointments/bulk-cancel",
+        { method: "POST", body: JSON.stringify({ appointment_ids, reason, notify_whatsapp }) }
+      ),
   },
 
   visits: {
@@ -467,5 +540,30 @@ export const api = {
       req<{ status: string }>("/trigger/visit-summary", { method: "POST" }),
     reviewRequests: () =>
       req<{ status: string }>("/trigger/review-requests", { method: "POST" }),
+  },
+
+  availability: {
+    get: (doctorId: string, date: string) =>
+      req<AvailabilityInfo>(`/availability?doctor_id=${doctorId}&date=${date}`),
+    range: (doctorId: string, startDate: string, endDate: string) =>
+      req<AvailabilityInfo[]>(`/availability/range?doctor_id=${doctorId}&start_date=${startDate}&end_date=${endDate}`),
+    set: (payload: AvailabilityPayload) =>
+      req<AvailabilityInfo>("/availability", { method: "POST", body: JSON.stringify(payload) }),
+    delete: (doctorId: string, date: string) =>
+      req<{ deleted: boolean; date: string }>(`/availability/${date}?doctor_id=${doctorId}`, { method: "DELETE" }),
+    blockFromCancel: (doctorId: string, date: string, blockType: "morning" | "evening" | "full_day") =>
+      req<AvailabilityInfo>("/availability/block-from-cancel", {
+        method: "POST",
+        body: JSON.stringify({ doctor_id: doctorId, date, block_type: blockType }),
+      }),
+  },
+
+  schedule: {
+    get: (doctorId: string) =>
+      req<DaySchedule[]>(`/schedule?doctor_id=${doctorId}`),
+    setDay: (payload: ScheduleDayPayload) =>
+      req<DaySchedule>("/schedule", { method: "POST", body: JSON.stringify(payload) }),
+    deleteDay: (doctorId: string, dayOfWeek: string) =>
+      req<{ deleted: boolean; day_of_week: string }>(`/schedule/${dayOfWeek}?doctor_id=${doctorId}`, { method: "DELETE" }),
   },
 };
