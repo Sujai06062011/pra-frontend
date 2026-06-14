@@ -549,7 +549,17 @@ export function Settings() {
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
         <SectionHeader icon={<Clock size={16} className="text-blue-600" />} title="Scheduler Timings (IST)" color="bg-blue-50" />
         <div className="grid grid-cols-2 gap-4">
-          {schedulerRows.map(r => <ConfigField key={r.config_key} row={r} onChange={handleChange} />)}
+          {[
+            "scheduler.visit_summary_time",
+            "scheduler.morning_reminder_time",
+            "scheduler.evening_reminder_time",
+            "scheduler.followup_whatsapp_time",
+            "scheduler.followup_calls_time",
+            "scheduler.review_request_time",
+          ].map(key => {
+            const r = schedulerRows.find(row => row.config_key === key);
+            return r ? <ConfigField key={r.config_key} row={r} onChange={handleChange} /> : null;
+          })}
         </div>
         <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-3">
           <button onClick={handleReloadScheduler} disabled={reloadState === "saving"}
