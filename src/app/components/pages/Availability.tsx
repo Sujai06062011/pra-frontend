@@ -4,7 +4,7 @@ import {
   RefreshCw, Trash2, Save, ChevronLeft, ChevronRight, Ban,
 } from "lucide-react";
 import { api } from "../../../lib/api";
-import type { AvailabilityInfo, DaySchedule } from "../../../lib/api";
+import type { AvailabilityInfo, ClinicScheduleResponse, ClinicScheduleDay } from "../../../lib/api";
 
 const DOCTOR_ID = "8c33abe0-5d2e-4613-9437-c7c375e8d162";
 const API_BASE = import.meta.env.VITE_API_URL || "https://web-production-e5f38.up.railway.app";
@@ -94,26 +94,24 @@ async function fetchClinicCfg(): Promise<ClinicCfg> {
 }
 
 const DAY_NAMES = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+const DAY_DISPLAY = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
 function getDayName(isoDate: string): string {
   return DAY_NAMES[new Date(isoDate + "T00:00:00").getDay()];
 }
+function getDayDisplay(isoDate: string): string {
+  return DAY_DISPLAY[new Date(isoDate + "T00:00:00").getDay()];
+}
 
-/** Returns the effective hours for a date from the weekly schedule (or global cfg if no schedule). */
-function dayDefaults(isoDate: string, schedule: Record<string, DaySchedule>, cfg: ClinicCfg) {
-  const sched = schedule[getDayName(isoDate)];
-  if (sched) return sched;
+/** Returns the clinic schedule day info for a given date. */
+function dayInfo(isoDate: string, clinicSchedule: ClinicScheduleResponse | null, cfg: ClinicCfg): ClinicScheduleDay {
+  const dayName = getDayName(isoDate);
+  if (clinicSchedule?.schedule[dayName]) return clinicSchedule.schedule[dayName];
   return {
-    day_of_week: getDayName(isoDate),
-    is_closed: false,
-    morning_enabled: true,
-    morning_start: cfg.morning_start,
-    morning_end: cfg.morning_end,
-    evening_enabled: true,
-    evening_start: cfg.evening_start,
-    evening_end: cfg.evening_end,
-    has_override: false,
-  } satisfies DaySchedule;
+    enabled: true,
+    morning: { enabled: true, start: cfg.morning_start, end: cfg.morning_end },
+    evening: { enabled: true, start: cfg.evening_start, end: cfg.evening_end },
+  };
 }
 
 // ── Toggle component ────────────────────────────────────────────────────────
@@ -154,14 +152,14 @@ function TimeSelect({ value, onChange, options, disabled }: {
 
 // ── Status row for upcoming summary ─────────────────────────────────────────
 
-function statusText(av: AvailabilityInfo, dd: DaySchedule): string {
+function statusText(av: AvailabilityInfo, di: ClinicScheduleDay): string {
   if (av.is_holiday) return `Holiday${av.holiday_name ? ` — ${av.holiday_name}` : " / Closed"}`;
-  if (!av.morning.enabled && !av.evening.enabled) return "Fully blocked";
+  if (!av.morning.enabled && !av.evening.enabled) return !di.enabled ? "Closed (weekly)" : "Fully blocked";
   if (!av.morning.enabled) return `Evening only: ${fmt12(av.evening.start)} – ${fmt12(av.evening.end)}`;
   if (!av.evening.enabled) return `Morning only: ${fmt12(av.morning.start)} – ${fmt12(av.morning.end)}`;
-  if (!av.has_override) return dd.is_closed ? "Closed (weekly)" : "Normal schedule";
-  const mCustom = av.morning.start !== dd.morning_start || av.morning.end !== dd.morning_end;
-  const eCustom = av.evening.start !== dd.evening_start || av.evening.end !== dd.evening_end;
+  if (!av.has_override) return "Normal schedule";
+  const mCustom = av.morning.start !== di.morning.start || av.morning.end !== di.morning.end;
+  const eCustom = av.evening.start !== di.evening.start || av.evening.end !== di.evening.end;
   if (mCustom || eCustom) return "Custom hours";
   return "Normal schedule";
 }
@@ -171,7 +169,7 @@ function statusText(av: AvailabilityInfo, dd: DaySchedule): string {
 export function Availability() {
   const today = todayISO();
   const [cfg, setCfg] = useState<ClinicCfg | null>(null);
-  const [weekSchedule, setWeekSchedule] = useState<Record<string, DaySchedule>>({});
+  const [clinicSchedule, setClinicSchedule] = useState<ClinicScheduleResponse | null>(null);
   const [calData, setCalData] = useState<Record<string, AvailabilityInfo>>({});
   const [calLoading, setCalLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(today);
@@ -205,11 +203,7 @@ export function Availability() {
       setEveningEnd(c.evening_end);
     }).catch(() => {});
 
-    api.schedule.get(DOCTOR_ID).then(days => {
-      const map: Record<string, DaySchedule> = {};
-      days.forEach(d => { map[d.day_of_week] = d; });
-      setWeekSchedule(map);
-    }).catch(() => {});
+    api.clinicSchedule.get(DOCTOR_ID).then(d => setClinicSchedule(d)).catch(() => {});
   }, []);
 
   // Load range (today + 30 days) on mount
@@ -232,18 +226,18 @@ export function Availability() {
   useEffect(() => {
     const av = calData[selectedDate];
     if (!av || !cfg) return;
-    const dd = dayDefaults(selectedDate, weekSchedule, cfg);
+    const di = dayInfo(selectedDate, clinicSchedule, cfg);
     setIsHoliday(av.is_holiday);
     setHolidayName(av.holiday_name ?? "");
     setMorningEnabled(av.morning.enabled);
-    setMorningStart(av.morning.start || dd.morning_start);
-    setMorningEnd(av.morning.end || dd.morning_end);
+    setMorningStart(av.morning.start || di.morning.start);
+    setMorningEnd(av.morning.end || di.morning.end);
     setEveningEnabled(av.evening.enabled);
-    setEveningStart(av.evening.start || dd.evening_start);
-    setEveningEnd(av.evening.end || dd.evening_end);
+    setEveningStart(av.evening.start || di.evening.start);
+    setEveningEnd(av.evening.end || di.evening.end);
     setMError(""); setEError("");
     setSaveStatus("idle");
-  }, [selectedDate, calData, cfg, weekSchedule]);
+  }, [selectedDate, calData, cfg, clinicSchedule]);
 
   // ── validation ──────────────────────────────────────────────────────────────
   const t2m = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
@@ -300,12 +294,12 @@ export function Availability() {
       await api.availability.delete(DOCTOR_ID, selectedDate);
       setConfirmReset(false);
       if (cfg) {
-        const dd = dayDefaults(selectedDate, weekSchedule, cfg);
-        setIsHoliday(dd.is_closed); setHolidayName("");
-        setMorningEnabled(!dd.is_closed && dd.morning_enabled);
-        setMorningStart(dd.morning_start); setMorningEnd(dd.morning_end);
-        setEveningEnabled(!dd.is_closed && dd.evening_enabled);
-        setEveningStart(dd.evening_start); setEveningEnd(dd.evening_end);
+        const di = dayInfo(selectedDate, clinicSchedule, cfg);
+        setIsHoliday(!di.enabled); setHolidayName("");
+        setMorningEnabled(di.enabled && di.morning.enabled);
+        setMorningStart(di.morning.start); setMorningEnd(di.morning.end);
+        setEveningEnabled(di.enabled && di.evening.enabled);
+        setEveningStart(di.evening.start); setEveningEnd(di.evening.end);
       }
       setSaveStatus("saved"); setSaveMsg("Reset to default clinic hours");
       await loadRange();
@@ -337,9 +331,11 @@ export function Availability() {
     );
   }
 
-  const dd = dayDefaults(selectedDate, weekSchedule, cfg);
-  const morningOpts = genTimeOptions(dd.morning_start, dd.morning_end, cfg.duration);
-  const eveningOpts = genTimeOptions(dd.evening_start, dd.evening_end, cfg.duration);
+  const di = dayInfo(selectedDate, clinicSchedule, cfg);
+  const dayLabel = getDayDisplay(selectedDate);
+  const isNormallyClosed = !di.enabled;
+  const morningOpts = genTimeOptions(di.morning.start, di.morning.end, cfg.duration);
+  const eveningOpts = genTimeOptions(di.evening.start, di.evening.end, cfg.duration);
 
   return (
     <div className="p-7 space-y-6 max-w-3xl">
@@ -424,6 +420,19 @@ export function Availability() {
           {fmtDateFull(selectedDate)}
         </h3>
 
+        {/* Normally-closed day banner */}
+        {isNormallyClosed && !isHoliday && (
+          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <AlertTriangle size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="text-[13px] font-semibold text-amber-800">This day is normally closed</div>
+              <div className="text-[12px] text-amber-600 mt-0.5">
+                {dayLabel} is marked as a closed day in Weekly Schedule. You can still open it for this specific date below.
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Holiday toggle */}
         <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
           <input
@@ -461,7 +470,7 @@ export function Availability() {
                 <div className="flex items-center gap-2">
                   <Sun size={15} className="text-amber-500" />
                   <span className="text-[13px] font-semibold text-slate-700">Morning Session</span>
-                  <span className="text-[11px] text-slate-400">Schedule: {fmt12(dd.morning_start)} – {fmt12(dd.morning_end)}</span>
+                  <span className="text-[11px] text-slate-400">{dayLabel} schedule: {fmt12(di.morning.start)} – {fmt12(di.morning.end)}</span>
                 </div>
                 <Toggle on={morningEnabled} onChange={setMorningEnabled} label="Morning" />
               </div>
@@ -493,7 +502,7 @@ export function Availability() {
                 <div className="flex items-center gap-2">
                   <Moon size={15} className="text-indigo-500" />
                   <span className="text-[13px] font-semibold text-slate-700">Evening Session</span>
-                  <span className="text-[11px] text-slate-400">Schedule: {fmt12(dd.evening_start)} – {fmt12(dd.evening_end)}</span>
+                  <span className="text-[11px] text-slate-400">{dayLabel} schedule: {fmt12(di.evening.start)} – {fmt12(di.evening.end)}</span>
                 </div>
                 <Toggle on={eveningEnabled} onChange={setEveningEnabled} label="Evening" />
               </div>
@@ -579,8 +588,8 @@ export function Availability() {
             const av = calData[date];
             const color = av ? dotColor(av) : "green";
             const label = i === 0 ? "Today" : fmtDateShort(date);
-            const dayDd = dayDefaults(date, weekSchedule, cfg);
-            const statusStr = av ? statusText(av, dayDd) : (dayDd.is_closed ? "Closed (weekly)" : "Normal schedule");
+            const dayDi = dayInfo(date, clinicSchedule, cfg);
+            const statusStr = av ? statusText(av, dayDi) : (!dayDi.enabled ? "Closed (weekly)" : "Normal schedule");
             return (
               <button
                 key={date}

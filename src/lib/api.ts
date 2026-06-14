@@ -222,6 +222,39 @@ export interface AvailabilityInfo {
   evening: AvailabilitySession;
 }
 
+export interface ClinicScheduleSession {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+export interface ClinicScheduleDay {
+  enabled: boolean;
+  morning: ClinicScheduleSession;
+  evening: ClinicScheduleSession;
+}
+
+export interface ClinicScheduleBoundaries {
+  morning_start: string;
+  morning_end: string;
+  evening_start: string;
+  evening_end: string;
+}
+
+export interface ClinicScheduleResponse {
+  slot_duration_minutes: number;
+  max_per_slot: number;
+  boundaries: ClinicScheduleBoundaries;
+  schedule: Record<string, ClinicScheduleDay>;
+}
+
+export interface ClinicSchedulePutPayload {
+  doctor_id: string;
+  slot_duration_minutes: number;
+  max_per_slot: number;
+  schedule: Record<string, ClinicScheduleDay>;
+}
+
 export interface DaySchedule {
   day_of_week: string;
   is_closed: boolean;
@@ -565,5 +598,16 @@ export const api = {
       req<DaySchedule>("/schedule", { method: "POST", body: JSON.stringify(payload) }),
     deleteDay: (doctorId: string, dayOfWeek: string) =>
       req<{ deleted: boolean; day_of_week: string }>(`/schedule/${dayOfWeek}?doctor_id=${doctorId}`, { method: "DELETE" }),
+  },
+
+  clinicSchedule: {
+    get: (doctorId: string) =>
+      req<ClinicScheduleResponse>(`/clinic/schedule?doctor_id=${doctorId}`),
+    getDay: (doctorId: string, day: string) =>
+      req<ClinicScheduleDay & { day: string; boundaries: ClinicScheduleBoundaries; slot_duration_minutes: number }>(
+        `/clinic/schedule/${day}?doctor_id=${doctorId}`
+      ),
+    put: (payload: ClinicSchedulePutPayload) =>
+      req<ClinicScheduleResponse>("/clinic/schedule", { method: "PUT", body: JSON.stringify(payload) }),
   },
 };

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, Search, Calendar, CheckCircle2, User } from "lucide-react";
+import { ArrowLeft, Search, Calendar, CheckCircle2, User, Ban } from "lucide-react";
 import { api } from "../../../lib/api";
-import type { Patient, SlotInfo, BookingResult } from "../../../lib/api";
+import type { Patient, SlotInfo, BookingResult, SlotsResponse } from "../../../lib/api";
 
 const DOCTOR_ID = "8c33abe0-5d2e-4613-9437-c7c375e8d162";
 
@@ -39,7 +39,18 @@ function SlotGrid({
 }) {
   if (slots.length === 0) return null;
   const label = section === "morning" ? "🌅 Morning" : "🌆 Evening";
-  const range = section === "morning" ? "9:00 AM – 1:00 PM" : "5:00 PM – 8:00 PM";
+
+  function fmtTime(t: string) {
+    const [hStr, mStr] = t.split(":");
+    const h = parseInt(hStr);
+    const h12 = h % 12 || 12;
+    const ampm = h >= 12 ? "PM" : "AM";
+    return `${h12}:${mStr} ${ampm}`;
+  }
+  const firstTime = slots[0].time;
+  // end = last slot time + slot duration; approximate by last slot's display
+  const lastTime = slots[slots.length - 1].time;
+  const range = `${fmtTime(firstTime)} – ${fmtTime(lastTime)}`;
 
   return (
     <div className="mb-5">
@@ -102,13 +113,14 @@ export function NewAppointment({
   // Booking step state
   const [dateMode, setDateMode] = useState<"today" | "tomorrow" | "other">("today");
   const [customDate, setCustomDate] = useState("");
-  const [slots, setSlots] = useState<SlotInfo[]>([]);
+  const [slotsResponse, setSlotsResponse] = useState<SlotsResponse | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState("");
   const [visitType, setVisitType] = useState("New Visit");
   const [booking, setBooking] = useState(false);
   const [bookError, setBookError] = useState("");
   const [result, setResult] = useState<BookingResult | null>(null);
+  const slotsCache = useRef<Record<string, SlotsResponse>>({});
 
   const appointmentDate =
     dateMode === "today" ? todayStr() :
@@ -136,25 +148,25 @@ export function NewAppointment({
     }, 300);
   }, [search]);
 
-  // Load slots + next token when date changes
+  // Load slots (with availability) when date changes — cached per date per session
   useEffect(() => {
     if (!appointmentDate || step !== "book-slot") return;
+    if (slotsCache.current[appointmentDate]) {
+      setSlotsResponse(slotsCache.current[appointmentDate]);
+      setSelectedSlot("");
+      return;
+    }
     setSlotsLoading(true);
-    setSlots([]);
+    setSlotsResponse(null);
     setSelectedSlot("");
     api.appointments.slots(DOCTOR_ID, appointmentDate)
-      .then(s => setSlots(s))
+      .then(r => { slotsCache.current[appointmentDate] = r; setSlotsResponse(r); })
       .catch(() => {}).finally(() => setSlotsLoading(false));
   }, [appointmentDate, step]);
 
-  const morningSlots = slots.filter(s => {
-    const h = parseInt(s.time.split(":")[0]);
-    return h < 13;
-  });
-  const eveningSlots = slots.filter(s => {
-    const h = parseInt(s.time.split(":")[0]);
-    return h >= 13;
-  });
+  const slots: SlotInfo[] = slotsResponse?.slots ?? [];
+  const morningSlots = slots.filter(s => s.session === "morning");
+  const eveningSlots = slots.filter(s => s.session === "evening");
 
   const handleBook = async () => {
     if (!selectedPatient) return;
@@ -331,11 +343,33 @@ export function NewAppointment({
                         <div key={i} className="w-16 h-12 bg-slate-100 rounded-xl animate-pulse" />
                       ))}
                     </div>
+                  ) : slotsResponse?.is_holiday ? (
+                    <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
+                      <Ban size={16} className="text-rose-500 flex-shrink-0" />
+                      <div>
+                        <div className="text-[13px] font-semibold text-rose-700">
+                          {slotsResponse.holiday_name
+                            ? slotsResponse.holiday_name
+                            : `Clinic is closed on ${new Date(appointmentDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long" })}s`}
+                        </div>
+                        <div className="text-[12px] text-rose-500 mt-0.5">No appointments available on this date</div>
+                      </div>
+                    </div>
                   ) : slots.length === 0 ? (
-                    <div className="text-[13px] text-slate-400">No slots available. Please run the SQL config first.</div>
+                    <div className="text-[13px] text-slate-400">No slots available for this date.</div>
                   ) : (
                     <>
+                      {!slotsResponse?.morning_enabled && (
+                        <div className="flex items-center gap-2 mb-3 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-[12px] text-amber-700 font-medium">
+                          <Ban size={13} className="flex-shrink-0" /> Morning session unavailable on this date
+                        </div>
+                      )}
                       <SlotGrid slots={morningSlots} section="morning" selected={selectedSlot} onSelect={setSelectedSlot} />
+                      {!slotsResponse?.evening_enabled && (
+                        <div className="flex items-center gap-2 mb-3 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-[12px] text-amber-700 font-medium">
+                          <Ban size={13} className="flex-shrink-0" /> Evening session unavailable on this date
+                        </div>
+                      )}
                       <SlotGrid slots={eveningSlots} section="evening" selected={selectedSlot} onSelect={setSelectedSlot} />
                     </>
                   )}
