@@ -32,7 +32,7 @@ export function useMedicineSearch() {
   const clear = useCallback(() => setResults([]), []);
 
   const addNewMedicine = useCallback(async (name: string, form = "tablet") => {
-    return api.medicines.add({ doctor_id: doctorId, name, form, category: "Other", dosages: [] });
+    return api.medicines.add({ doctor_id: doctorId, name, form: form as "tablet" | "liquid" | "inhaler" | "topical" | "other", category: "Other", dosages: [] });
   }, [doctorId]);
 
   const incrementUsage = useCallback((medicineId: string) => {

@@ -1,17 +1,17 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { Page } from "../Sidebar";
 import {
   CalendarDays, Hash, Pill, Phone, FlaskConical, MessageCircle,
   TrendingUp, TrendingDown, ChevronRight, AlertTriangle, X,
   CheckCircle2, Clock, XCircle, ArrowRight, Activity, RefreshCw
 } from "lucide-react";
+import { api, type PharmacyAlerts } from "../../../lib/api";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from "recharts";
 import { useDashboardStats, useAppointments, useTodayAppointments, useQueries, useFollowUps } from "../../../hooks/usePRAData";
 import { useAuth } from "../../../context/AuthContext";
-import { api } from "../../../lib/api";
 
 const visitTypes = [
   { name: "Follow-up", value: 45, color: "#10b981" },
@@ -182,6 +182,12 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
 
   const { data: queries } = useQueries();
   const { data: followUps } = useFollowUps();
+
+  const [pharmacyAlerts, setPharmacyAlerts] = useState<PharmacyAlerts | null>(null);
+  useEffect(() => {
+    if (!doctorId) return;
+    api.pharmacy.alerts(doctorId).then(setPharmacyAlerts).catch(() => {});
+  }, [doctorId]);
 
   const pendingQueries = queries.filter(q => q.status === "Pending");
   const pendingFollowUps = followUps.filter(f => !f.completed_at);
@@ -356,6 +362,84 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
           />
         </div>
       </div>
+
+      {/* Pharmacy Alerts */}
+      {pharmacyAlerts && pharmacyAlerts.summary.total_alerts > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-red-50 border-b border-red-100">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">💊</span>
+              <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 14 }} className="text-red-800">Pharmacy Alerts</span>
+              <span className="bg-red-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
+                {pharmacyAlerts.summary.total_alerts}
+              </span>
+            </div>
+            <button
+              onClick={() => onNavigate?.("medicines")}
+              className="text-[12px] text-red-600 hover:underline font-medium"
+            >
+              View Medicines →
+            </button>
+          </div>
+
+          {pharmacyAlerts.expired.length > 0 && (
+            <div className="px-4 py-3 border-b border-slate-100">
+              <p className="text-[11px] font-semibold text-red-600 uppercase tracking-wide mb-2">
+                🔴 Expired — Action Required ({pharmacyAlerts.expired.length})
+              </p>
+              {pharmacyAlerts.expired.map(item => (
+                <div key={item.batch_id} className="flex items-center justify-between py-1.5">
+                  <div>
+                    <span className="text-[13px] font-medium text-slate-800">{item.name}</span>
+                    <span className="text-[11px] text-slate-400 ml-2">
+                      Batch {item.batch_number} · Expired {new Date(item.expiry_date + "T00:00:00").toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
+                    </span>
+                  </div>
+                  <span className="text-[12px] text-red-600 font-medium">{item.tablets_remaining} units</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {pharmacyAlerts.low_stock.length > 0 && (
+            <div className="px-4 py-3 border-b border-slate-100">
+              <p className="text-[11px] font-semibold text-orange-600 uppercase tracking-wide mb-2">
+                ⚠️ Low Stock ({pharmacyAlerts.low_stock.length})
+              </p>
+              {pharmacyAlerts.low_stock.map(item => (
+                <div key={item.id} className="flex items-center justify-between py-1.5">
+                  <span className="text-[13px] font-medium text-slate-800">{item.name}</span>
+                  <div className="text-right">
+                    <span className="text-[13px] font-bold text-orange-600">{item.total_stock}</span>
+                    <span className="text-[11px] text-slate-400 ml-1">left (min: {item.low_stock_threshold})</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {pharmacyAlerts.expiring_soon.length > 0 && (
+            <div className="px-4 py-3">
+              <p className="text-[11px] font-semibold text-yellow-600 uppercase tracking-wide mb-2">
+                🟡 Expiring Soon ({pharmacyAlerts.expiring_soon.length})
+              </p>
+              {pharmacyAlerts.expiring_soon.slice(0, 3).map(item => (
+                <div key={item.batch_id} className="flex items-center justify-between py-1.5">
+                  <span className="text-[13px] font-medium text-slate-800">{item.name}</span>
+                  <span className="text-[12px] text-yellow-600 font-medium">
+                    Expires {new Date(item.expiry_date + "T00:00:00").toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
+                  </span>
+                </div>
+              ))}
+              {pharmacyAlerts.expiring_soon.length > 3 && (
+                <button onClick={() => onNavigate?.("medicines")} className="text-[12px] text-slate-400 hover:underline">
+                  +{pharmacyAlerts.expiring_soon.length - 3} more →
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Bottom grid */}
       <div className="grid grid-cols-5 gap-4">

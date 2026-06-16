@@ -175,6 +175,54 @@ export interface ClinicMedicine {
   form: "tablet" | "liquid" | "inhaler" | "topical" | "other";
   usage_count: number;
   is_active: boolean;
+  // Stock fields (null if no stock entered yet)
+  total_stock?: number | null;
+  stock_status?: "ok" | "low_stock" | "out_of_stock" | "expiring_soon" | "expired" | null;
+  earliest_expiry?: string | null;
+  low_stock_threshold?: number | null;
+  purchase_unit?: string;
+  dispense_unit?: string;
+  tablets_per_strip?: number;
+}
+
+export interface MedicineStockBatch {
+  id: string;
+  medicine_id: string;
+  doctor_id: string;
+  batch_number: string;
+  expiry_date: string;
+  strips_received: number;
+  tablets_received: number;
+  tablets_remaining: number;
+  purchase_price_per_strip?: number;
+  supplier_name?: string;
+  invoice_number?: string;
+  date_received?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  expiry_status: "ok" | "expiring_soon" | "expired";
+  strips_remaining: number;
+}
+
+export interface StockTransaction {
+  id: string;
+  medicine_id: string;
+  stock_batch_id?: string;
+  doctor_id: string;
+  transaction_type: "purchase" | "dispensed" | "expired_writeoff" | "adjustment";
+  quantity_change: number;
+  reference_id?: string;
+  notes?: string;
+  created_at: string;
+  medicine_stock?: { batch_number: string; expiry_date: string };
+}
+
+export interface PharmacyAlerts {
+  low_stock: { id: string; name: string; dispense_unit: string; low_stock_threshold: number; total_stock: number }[];
+  expiring_soon: { id: string; batch_id: string; name: string; expiry_date: string; batch_number: string; tablets_remaining: number }[];
+  expired: { id: string; batch_id: string; name: string; expiry_date: string; batch_number: string; tablets_remaining: number }[];
+  summary: { low_stock_count: number; expiring_soon_count: number; expired_count: number; total_alerts: number };
 }
 
 export interface PatientRegistrationPayload {
@@ -506,8 +554,8 @@ export const api = {
 
   medicines: {
     search: (doctorId: string, query: string, limit = 8) =>
-      req<ClinicMedicine[]>(`/medicines?doctor_id=${doctorId}&search=${encodeURIComponent(query)}&limit=${limit}`),
-    list: (doctorId: string, limit = 100) =>
+      req<ClinicMedicine[]>(`/medicines?doctor_id=${doctorId}&search=${encodeURIComponent(query)}&limit=${limit}&active=true`),
+    list: (doctorId: string, limit = 500) =>
       req<ClinicMedicine[]>(`/medicines?doctor_id=${doctorId}&limit=${limit}`),
     categories: (doctorId: string) =>
       req<string[]>(`/medicines/categories?doctor_id=${doctorId}`),
@@ -515,10 +563,41 @@ export const api = {
       req<ClinicMedicine>("/medicines", { method: "POST", body: JSON.stringify(data) }),
     update: (id: string, data: Partial<ClinicMedicine>) =>
       req<ClinicMedicine>(`/medicines/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-    deactivate: (id: string) =>
-      req<{ ok: boolean }>(`/medicines/${id}`, { method: "DELETE" }),
+    deactivate: (id: string, reason?: string) =>
+      req<{ ok: boolean }>(`/medicines/${id}/deactivate`, { method: "PATCH", body: JSON.stringify({ reason }) }),
+    activate: (id: string) =>
+      req<{ ok: boolean }>(`/medicines/${id}/activate`, { method: "PATCH" }),
+    setThreshold: (id: string, threshold: number | null) =>
+      req<{ ok: boolean }>(`/medicines/${id}/threshold`, { method: "PATCH", body: JSON.stringify({ threshold }) }),
     incrementUsage: (id: string) =>
       req<{ ok: boolean }>(`/medicines/${id}/increment-usage`, { method: "PATCH" }),
+    getStock: (medicineId: string) =>
+      req<MedicineStockBatch[]>(`/medicines/${medicineId}/stock`),
+    addStock: (medicineId: string, data: {
+      batch_number?: string;
+      expiry_date: string;
+      strips_received: number;
+      purchase_price_per_strip?: number;
+      supplier_name?: string;
+      invoice_number?: string;
+      date_received?: string;
+    }) =>
+      req<{ ok: boolean; batch: MedicineStockBatch; tablets_received: number }>(`/medicines/${medicineId}/stock`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    writeoff: (medicineId: string, batchId: string, reason: string, quantity: number) =>
+      req<{ ok: boolean; deducted: number; remaining: number }>(
+        `/medicines/${medicineId}/stock/${batchId}/writeoff`,
+        { method: "POST", body: JSON.stringify({ reason, quantity }) }
+      ),
+    getTransactions: (medicineId: string) =>
+      req<StockTransaction[]>(`/medicines/${medicineId}/transactions`),
+  },
+
+  pharmacy: {
+    alerts: (doctorId: string) =>
+      req<PharmacyAlerts>(`/dashboard/pharmacy-alerts?doctor_id=${doctorId}`),
   },
 
   followups: {
