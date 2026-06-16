@@ -365,79 +365,97 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
 
       {/* Pharmacy Alerts */}
       {pharmacyAlerts && pharmacyAlerts.summary.total_alerts > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 bg-red-50 border-b border-red-100">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">💊</span>
-              <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 14 }} className="text-red-800">Pharmacy Alerts</span>
-              <span className="bg-red-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
-                {pharmacyAlerts.summary.total_alerts}
-              </span>
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          {/* Header — matches other section cards */}
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center flex-shrink-0">
+                <Pill size={20} className="text-rose-500" />
+              </div>
+              <div>
+                <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15 }} className="text-slate-800 flex items-center gap-2">
+                  Pharmacy Alerts
+                  <span className="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                    {pharmacyAlerts.summary.total_alerts}
+                  </span>
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {[
+                    pharmacyAlerts.summary.expired_count > 0 && `${pharmacyAlerts.summary.expired_count} expired`,
+                    pharmacyAlerts.summary.low_stock_count > 0 && `${pharmacyAlerts.summary.low_stock_count} low stock`,
+                    pharmacyAlerts.summary.expiring_soon_count > 0 && `${pharmacyAlerts.summary.expiring_soon_count} expiring soon`,
+                  ].filter(Boolean).join(" · ")}
+                </p>
+              </div>
             </div>
             <button
               onClick={() => onNavigate?.("medicines")}
-              className="text-[12px] text-red-600 hover:underline font-medium"
+              className="flex items-center gap-1 text-[12px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
             >
-              View Medicines →
+              View Medicines <ArrowRight size={13} />
             </button>
           </div>
 
-          {pharmacyAlerts.expired.length > 0 && (
-            <div className="px-4 py-3 border-b border-slate-100">
-              <p className="text-[11px] font-semibold text-red-600 uppercase tracking-wide mb-2">
-                🔴 Expired — Action Required ({pharmacyAlerts.expired.length})
-              </p>
-              {pharmacyAlerts.expired.map(item => (
-                <div key={item.batch_id} className="flex items-center justify-between py-1.5">
+          {/* Alert rows in a single flat list — same density as appointments table */}
+          <div className="divide-y divide-slate-50">
+            {pharmacyAlerts.expired.map(item => (
+              <div key={item.batch_id} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50/60 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
                   <div>
                     <span className="text-[13px] font-medium text-slate-800">{item.name}</span>
-                    <span className="text-[11px] text-slate-400 ml-2">
-                      Batch {item.batch_number} · Expired {new Date(item.expiry_date + "T00:00:00").toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
-                    </span>
-                  </div>
-                  <span className="text-[12px] text-red-600 font-medium">{item.tablets_remaining} units</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {pharmacyAlerts.low_stock.length > 0 && (
-            <div className="px-4 py-3 border-b border-slate-100">
-              <p className="text-[11px] font-semibold text-orange-600 uppercase tracking-wide mb-2">
-                ⚠️ Low Stock ({pharmacyAlerts.low_stock.length})
-              </p>
-              {pharmacyAlerts.low_stock.map(item => (
-                <div key={item.id} className="flex items-center justify-between py-1.5">
-                  <span className="text-[13px] font-medium text-slate-800">{item.name}</span>
-                  <div className="text-right">
-                    <span className="text-[13px] font-bold text-orange-600">{item.total_stock}</span>
-                    <span className="text-[11px] text-slate-400 ml-1">left (min: {item.low_stock_threshold})</span>
+                    <span className="text-[11px] text-slate-400 ml-2">Batch {item.batch_number}</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {pharmacyAlerts.expiring_soon.length > 0 && (
-            <div className="px-4 py-3">
-              <p className="text-[11px] font-semibold text-yellow-600 uppercase tracking-wide mb-2">
-                🟡 Expiring Soon ({pharmacyAlerts.expiring_soon.length})
-              </p>
-              {pharmacyAlerts.expiring_soon.slice(0, 3).map(item => (
-                <div key={item.batch_id} className="flex items-center justify-between py-1.5">
-                  <span className="text-[13px] font-medium text-slate-800">{item.name}</span>
-                  <span className="text-[12px] text-yellow-600 font-medium">
-                    Expires {new Date(item.expiry_date + "T00:00:00").toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-slate-400">
+                    Expired {new Date(item.expiry_date + "T00:00:00").toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
+                  </span>
+                  <span className="text-[11px] font-semibold bg-red-50 text-red-600 px-2 py-0.5 rounded-full">
+                    {item.tablets_remaining} units · Expired
                   </span>
                 </div>
-              ))}
-              {pharmacyAlerts.expiring_soon.length > 3 && (
-                <button onClick={() => onNavigate?.("medicines")} className="text-[12px] text-slate-400 hover:underline">
-                  +{pharmacyAlerts.expiring_soon.length - 3} more →
+              </div>
+            ))}
+
+            {pharmacyAlerts.low_stock.map(item => (
+              <div key={item.id} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50/60 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0" />
+                  <span className="text-[13px] font-medium text-slate-800">{item.name}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] text-slate-400">threshold: {item.low_stock_threshold} {item.dispense_unit}s</span>
+                  <span className="text-[11px] font-semibold bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full">
+                    {item.total_stock} left · Low Stock
+                  </span>
+                </div>
+              </div>
+            ))}
+
+            {pharmacyAlerts.expiring_soon.slice(0, 5).map(item => (
+              <div key={item.batch_id} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50/60 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+                  <div>
+                    <span className="text-[13px] font-medium text-slate-800">{item.name}</span>
+                    {item.batch_number && <span className="text-[11px] text-slate-400 ml-2">Batch {item.batch_number}</span>}
+                  </div>
+                </div>
+                <span className="text-[11px] font-semibold bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full">
+                  Expires {new Date(item.expiry_date + "T00:00:00").toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
+                </span>
+              </div>
+            ))}
+
+            {pharmacyAlerts.expiring_soon.length > 5 && (
+              <div className="px-5 py-2.5">
+                <button onClick={() => onNavigate?.("medicines")} className="text-[12px] text-slate-400 hover:text-slate-600">
+                  +{pharmacyAlerts.expiring_soon.length - 5} more expiring soon →
                 </button>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
