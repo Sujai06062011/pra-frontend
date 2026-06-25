@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Save, Building2, Clock, Bell, MessageSquare, RefreshCw,
   CheckCircle, AlertCircle, Loader2, ShieldAlert, CalendarDays,
-  Sun, Moon, Copy,
+  Sun, Moon, Copy, Video,
 } from "lucide-react";
-import type { ClinicScheduleResponse, ClinicScheduleDay, ClinicScheduleSession } from "../../../lib/api";
+import type { ClinicScheduleResponse, ClinicScheduleDay, ClinicScheduleSession, DoctorOnlineSettings, OnlineDayEntry, OnlineDaySession } from "../../../lib/api";
+import { api } from "../../../lib/api";
 
 const DOCTOR_ID = "8c33abe0-5d2e-4613-9437-c7c375e8d162";
 const API_BASE = import.meta.env.VITE_API_URL || "https://web-production-e5f38.up.railway.app";
@@ -176,7 +177,7 @@ function TimeDropdown({
 }) {
   return (
     <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
-      className="px-2 py-1 text-[12px] border border-slate-200 rounded-lg text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed min-w-[88px]">
+      className="px-2 py-1 text-[12px] border border-slate-200 rounded-lg text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed min-w-0 flex-shrink">
       {options.map(o => <option key={o} value={o}>{fmt12(o)}</option>)}
     </select>
   );
@@ -247,7 +248,7 @@ function DayRow({
       {dayData.enabled ? (
         <div className="border-t border-slate-50 px-3.5 pb-2.5 pt-2 space-y-2">
           {/* Morning row */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Sun size={11} className="text-amber-400 shrink-0" />
             <span className="text-[11px] text-slate-500 w-14 shrink-0">Morning</span>
             <button type="button"
@@ -260,20 +261,20 @@ function DayRow({
               {dayData.morning.enabled ? "On" : "Off"}
             </button>
             {dayData.morning.enabled ? (
-              <>
+              <div className="flex items-center gap-1 flex-wrap min-w-0">
                 <TimeDropdown value={dayData.morning.start} options={mStartOpts}
                   onChange={v => updateSession("morning", { start: v })} />
                 <span className="text-[11px] text-slate-400">–</span>
                 <TimeDropdown value={dayData.morning.end} options={mEndOpts.length ? mEndOpts : [dayData.morning.end]}
                   onChange={v => updateSession("morning", { end: v })} />
-              </>
+              </div>
             ) : (
               <span className="text-[11px] text-slate-400">Not available</span>
             )}
           </div>
 
           {/* Evening row */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Moon size={11} className="text-indigo-400 shrink-0" />
             <span className="text-[11px] text-slate-500 w-14 shrink-0">Evening</span>
             <button type="button"
@@ -286,13 +287,13 @@ function DayRow({
               {dayData.evening.enabled ? "On" : "Off"}
             </button>
             {dayData.evening.enabled ? (
-              <>
+              <div className="flex items-center gap-1 flex-wrap min-w-0">
                 <TimeDropdown value={dayData.evening.start} options={eStartOpts}
                   onChange={v => updateSession("evening", { start: v })} />
                 <span className="text-[11px] text-slate-400">–</span>
                 <TimeDropdown value={dayData.evening.end} options={eEndOpts.length ? eEndOpts : [dayData.evening.end]}
                   onChange={v => updateSession("evening", { end: v })} />
-              </>
+              </div>
             ) : (
               <span className="text-[11px] text-slate-400">Not available</span>
             )}
@@ -471,6 +472,282 @@ function WeeklyScheduleSection() {
 
 // ── Main Settings component ───────────────────────────────────────────────────
 
+// ── Online Consultation Section ───────────────────────────────────────────────
+
+const DAYS_ORDER = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday"] as const;
+const DAY_LABELS: Record<string, string> = {
+  monday: "Mon", tuesday: "Tue", wednesday: "Wed", thursday: "Thu",
+  friday: "Fri", saturday: "Sat", sunday: "Sun",
+};
+
+function genHours(from = "05:00", to = "23:30", step = 15) {
+  const opts: string[] = [];
+  const [sh, sm] = from.split(":").map(Number);
+  const [eh, em] = to.split(":").map(Number);
+  let cur = sh * 60 + sm;
+  const endMin = eh * 60 + em;
+  while (cur <= endMin) {
+    const h = Math.floor(cur / 60), m = cur % 60;
+    opts.push(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);
+    cur += step;
+  }
+  return opts;
+}
+const HOUR_OPTS = genHours();
+
+const DEFAULT_DAY_ENTRY = (day: string): OnlineDayEntry => ({
+  day,
+  morning: { enabled: false, start: "10:00", end: "13:30" },
+  evening: { enabled: true,  start: "20:00", end: "21:00" },
+});
+
+function timesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+function SessionRow({
+  label, icon, session, onChange, overlapError,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  session: OnlineDaySession;
+  onChange: (updates: Partial<OnlineDaySession>) => void;
+  overlapError?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1 pl-2">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => onChange({ enabled: !session.enabled })}
+          className={`flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg border transition-all min-w-[58px] justify-center ${
+            session.enabled
+              ? overlapError ? "bg-red-100 text-red-700 border-red-200" : "bg-blue-100 text-blue-700 border-blue-200"
+              : "bg-slate-50 text-slate-400 border-slate-200"
+          }`}
+        >
+          {icon} {session.enabled ? "On" : "Off"}
+        </button>
+        {session.enabled ? (
+          <div className="flex items-center gap-2">
+            <select
+              value={session.start}
+            onChange={e => onChange({ start: e.target.value })}
+            className="text-[12px] border border-slate-200 rounded-lg px-2 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-300"
+          >
+            {HOUR_OPTS.map(o => <option key={o} value={o}>{fmt12(o)}</option>)}
+          </select>
+          <span className="text-[11px] text-slate-400">–</span>
+          <select
+            value={session.end}
+            onChange={e => onChange({ end: e.target.value })}
+            className="text-[12px] border border-slate-200 rounded-lg px-2 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-300"
+          >
+            {HOUR_OPTS.map(o => <option key={o} value={o}>{fmt12(o)}</option>)}
+          </select>
+          <span className="text-[11px] text-blue-500 font-semibold">💻 Online</span>
+        </div>
+      ) : (
+        <span className="text-[12px] text-slate-300">{label} — not available</span>
+      )}
+      </div>
+      {overlapError && (
+        <div className="flex items-center gap-1.5 text-[11px] text-red-600 font-medium ml-1">
+          <AlertCircle size={11} /> {overlapError}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function getOverlapError(
+  day: string,
+  session: "morning" | "evening",
+  onlineStart: string,
+  onlineEnd: string,
+  clinicSchedule: ClinicScheduleResponse | null,
+): string | undefined {
+  if (!clinicSchedule) return undefined;
+  const dayData = clinicSchedule.schedule[day];
+  if (!dayData || !dayData.enabled) return undefined;
+  const clinicSess = dayData[session];
+  if (!clinicSess || !clinicSess.enabled) return undefined;
+  if (timesOverlap(onlineStart, onlineEnd, clinicSess.start, clinicSess.end)) {
+    return `Overlaps with in-clinic ${session} (${fmt12(clinicSess.start)}–${fmt12(clinicSess.end)})`;
+  }
+  return undefined;
+}
+
+function OnlineConsultationSection() {
+  const [settings, setSettings] = useState<DoctorOnlineSettings>({
+    online_consultation_enabled: false,
+    online_consultation_hours: [],
+    online_consultation_fee: 0,
+  });
+  const [clinicSchedule, setClinicSchedule] = useState<ClinicScheduleResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+
+  useEffect(() => {
+    Promise.all([
+      api.doctors.getOnlineSettings(DOCTOR_ID),
+      fetch(`${API_BASE}/clinic/schedule?doctor_id=${DOCTOR_ID}`).then(r => r.json()),
+    ]).then(([s, sched]) => {
+        const migrated = (s.online_consultation_hours || []).map((h: OnlineDayEntry & { start?: string; end?: string }) => {
+          if (!h.morning && !h.evening) {
+            return {
+              day: h.day,
+              morning: { enabled: false, start: "10:00", end: "13:30" },
+              evening: { enabled: true, start: (h as { start?: string }).start || "20:00", end: (h as { end?: string }).end || "21:00" },
+            } as OnlineDayEntry;
+          }
+          return h;
+        });
+        setSettings({ ...s, online_consultation_hours: migrated });
+        setClinicSchedule(sched as ClinicScheduleResponse);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  function getDay(day: string): OnlineDayEntry | undefined {
+    return settings.online_consultation_hours.find(h => h.day === day);
+  }
+
+  function toggleDay(day: string) {
+    if (getDay(day)) {
+      setSettings(s => ({ ...s, online_consultation_hours: s.online_consultation_hours.filter(h => h.day !== day) }));
+    } else {
+      setSettings(s => ({ ...s, online_consultation_hours: [...s.online_consultation_hours, DEFAULT_DAY_ENTRY(day)] }));
+    }
+  }
+
+  function updateSession(day: string, session: "morning" | "evening", updates: Partial<OnlineDaySession>) {
+    setSettings(s => ({
+      ...s,
+      online_consultation_hours: s.online_consultation_hours.map(h =>
+        h.day === day ? { ...h, [session]: { ...h[session], ...updates } } : h
+      ),
+    }));
+  }
+
+  const hasAnyOverlap = settings.online_consultation_hours.some(entry => {
+    for (const sess of ["morning", "evening"] as const) {
+      const s = entry[sess];
+      if (s?.enabled && getOverlapError(entry.day, sess, s.start, s.end, clinicSchedule)) return true;
+    }
+    return false;
+  });
+
+  async function handleSave() {
+    if (hasAnyOverlap) return;
+    setSaveState("saving");
+    try {
+      await api.doctors.updateOnlineSettings(DOCTOR_ID, settings);
+      setSaveState("saved");
+      setTimeout(() => setSaveState("idle"), 2500);
+    } catch {
+      setSaveState("error");
+    }
+  }
+
+  if (loading) return null;
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+            <Video size={14} className="text-blue-600" />
+          </div>
+          <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700 }} className="text-[15px] text-slate-800">
+            Online Consultations
+          </span>
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <span className="text-[12px] font-medium text-slate-500">{settings.online_consultation_enabled ? "Enabled" : "Disabled"}</span>
+          <div
+            onClick={() => setSettings(s => ({ ...s, online_consultation_enabled: !s.online_consultation_enabled }))}
+            className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer ${settings.online_consultation_enabled ? "bg-blue-500" : "bg-slate-300"}`}
+          >
+            <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${settings.online_consultation_enabled ? "left-5" : "left-0.5"}`} />
+          </div>
+        </label>
+      </div>
+
+      {settings.online_consultation_enabled && (
+        <>
+          <p className="text-[12px] text-slate-400 mb-5">Configure which days and sessions are available for online consultations. Each day has Morning and Evening sessions.</p>
+          <div className="space-y-4">
+            {DAYS_ORDER.map(day => {
+              const entry = getDay(day);
+              const isOpen = !!entry;
+              return (
+                <div key={day} className="border border-slate-100 rounded-xl overflow-hidden">
+                  {/* Day header */}
+                  <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-50">
+                    <span className="text-[13px] font-bold text-slate-600 w-12">{DAY_LABELS[day]}</span>
+                    <button
+                      onClick={() => toggleDay(day)}
+                      className={`text-[11px] font-bold px-3 py-1 rounded-lg border transition-all ${
+                        isOpen ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-400 border-slate-200 hover:border-blue-300"
+                      }`}
+                    >
+                      {isOpen ? "Open" : "Closed"}
+                    </button>
+                    {!isOpen && <span className="text-[12px] text-slate-300">No online consultations</span>}
+                  </div>
+
+                  {/* Sessions */}
+                  {isOpen && entry && (
+                    <div className="px-4 py-3 space-y-3">
+                      <SessionRow
+                        label="Morning"
+                        icon={<Sun size={10} />}
+                        session={entry.morning}
+                        onChange={u => updateSession(day, "morning", u)}
+                        overlapError={entry.morning.enabled ? getOverlapError(day, "morning", entry.morning.start, entry.morning.end, clinicSchedule) : undefined}
+                      />
+                      <SessionRow
+                        label="Evening"
+                        icon={<Moon size={10} />}
+                        session={entry.evening}
+                        onChange={u => updateSession(day, "evening", u)}
+                        overlapError={entry.evening.enabled ? getOverlapError(day, "evening", entry.evening.start, entry.evening.end, clinicSchedule) : undefined}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      <div className="mt-5 pt-4 border-t border-slate-100 flex flex-col gap-2">
+        {hasAnyOverlap && (
+          <div className="flex items-center gap-2 text-[12px] text-red-600 font-medium bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <AlertCircle size={13} /> Fix overlapping times with in-clinic schedule before saving.
+          </div>
+        )}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSave}
+            disabled={saveState === "saving" || hasAnyOverlap}
+            className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-60 text-white text-[13px] font-semibold px-5 py-2 rounded-xl shadow-sm transition-colors"
+          >
+            {saveState === "saving" ? <Loader2 size={14} className="animate-spin" />
+              : saveState === "saved" ? <CheckCircle size={14} />
+              : saveState === "error" ? <AlertCircle size={14} />
+              : <Save size={14} />}
+            {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved!" : saveState === "error" ? "Error" : "Save Online Settings"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Settings() {
   const { rows, loading, error, reload } = useConfig();
   const [localRows, setLocalRows] = useState<ConfigRow[]>([]);
@@ -535,7 +812,7 @@ export function Settings() {
       {/* ── Clinic Information ─────────────────────────── */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
         <SectionHeader icon={<Building2 size={16} className="text-emerald-600" />} title="Clinic Information" color="bg-emerald-50" />
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[...clinicInfoRows, ...featureOther].map(r => (
             <ConfigField key={r.config_key} row={r} onChange={handleChange} />
           ))}
@@ -545,10 +822,13 @@ export function Settings() {
       {/* ── Weekly Schedule (merged) ───────────────────── */}
       <WeeklyScheduleSection />
 
+      {/* ── Online Consultations ──────────────────────── */}
+      <OnlineConsultationSection />
+
       {/* ── Scheduler Timings ─────────────────────────── */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
         <SectionHeader icon={<Clock size={16} className="text-blue-600" />} title="Scheduler Timings (IST)" color="bg-blue-50" />
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[
             "scheduler.visit_summary.time",
             "scheduler.morning_reminders.time",

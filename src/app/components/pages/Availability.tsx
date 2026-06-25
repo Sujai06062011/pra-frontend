@@ -109,6 +109,7 @@ function dayInfo(isoDate: string, clinicSchedule: ClinicScheduleResponse | null,
   if (clinicSchedule?.schedule[dayName]) return clinicSchedule.schedule[dayName];
   return {
     enabled: true,
+    slot_duration_minutes: cfg.duration,
     morning: { enabled: true, start: cfg.morning_start, end: cfg.morning_end },
     evening: { enabled: true, start: cfg.evening_start, end: cfg.evening_end },
   };
@@ -121,14 +122,14 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
     <button
       type="button"
       onClick={() => onChange(!on)}
-      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold border transition-all ${
+      className={`flex items-center gap-1.5 px-2 py-1 sm:px-4 sm:py-2 rounded-xl text-[11px] sm:text-[13px] font-semibold border transition-all ${
         on
           ? "bg-emerald-500 text-white border-emerald-500 shadow-sm"
           : "bg-amber-50 text-amber-700 border-amber-300"
       }`}
     >
       {on ? <CheckCircle2 size={14} /> : <Ban size={14} />}
-      {on ? `${label} Open` : `${label} Blocked`}
+      {on ? "Open" : "Blocked"}
     </button>
   );
 }
@@ -405,9 +406,9 @@ export function Availability() {
         )}
 
         {/* Legend */}
-        <div className="flex items-center gap-4 mt-4 pt-3 border-t border-slate-50">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-4 pt-3 border-t border-slate-50">
           {([["green", "Fully open"], ["amber", "Partially blocked"], ["red", "Closed / Holiday"]] as const).map(([c, l]) => (
-            <div key={c} className="flex items-center gap-1.5 text-[11px] text-slate-500">
+            <div key={c} className="flex items-center gap-1.5 text-[11px] text-slate-500 whitespace-nowrap">
               <span className={`w-2 h-2 rounded-full ${dotCls(c)}`} /> {l}
             </div>
           ))}
@@ -466,11 +467,11 @@ export function Availability() {
           <>
             {/* Morning session */}
             <div className="border border-slate-100 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sun size={15} className="text-amber-500" />
-                  <span className="text-[13px] font-semibold text-slate-700">Morning Session</span>
-                  <span className="text-[11px] text-slate-400">{dayLabel} schedule: {fmt12(di.morning.start)} – {fmt12(di.morning.end)}</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <Sun size={15} className="text-amber-500 flex-shrink-0" />
+                  <span className="text-[13px] font-semibold text-slate-700 whitespace-nowrap">Morning Session</span>
+                  <span className="text-[11px] text-slate-400 break-words min-w-0">{dayLabel} schedule: {fmt12(di.morning.start)} – {fmt12(di.morning.end)}</span>
                 </div>
                 <Toggle on={morningEnabled} onChange={setMorningEnabled} label="Morning" />
               </div>
@@ -498,11 +499,11 @@ export function Availability() {
 
             {/* Evening session */}
             <div className="border border-slate-100 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Moon size={15} className="text-indigo-500" />
-                  <span className="text-[13px] font-semibold text-slate-700">Evening Session</span>
-                  <span className="text-[11px] text-slate-400">{dayLabel} schedule: {fmt12(di.evening.start)} – {fmt12(di.evening.end)}</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <Moon size={15} className="text-indigo-500 flex-shrink-0" />
+                  <span className="text-[13px] font-semibold text-slate-700 whitespace-nowrap">Evening Session</span>
+                  <span className="text-[11px] text-slate-400 break-words min-w-0">{dayLabel} schedule: {fmt12(di.evening.start)} – {fmt12(di.evening.end)}</span>
                 </div>
                 <Toggle on={eveningEnabled} onChange={setEveningEnabled} label="Evening" />
               </div>
@@ -543,11 +544,11 @@ export function Availability() {
         )}
 
         {/* Actions */}
-        <div className="flex items-center gap-3 pt-1">
+        <div className="flex flex-wrap items-center gap-2 pt-1">
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-[13px] font-semibold rounded-xl shadow-sm shadow-emerald-200 transition-colors"
+            className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-[13px] font-semibold rounded-xl shadow-sm shadow-emerald-200 transition-colors whitespace-nowrap"
           >
             {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
             Save Changes
@@ -556,7 +557,7 @@ export function Availability() {
           {!confirmReset ? (
             <button
               onClick={() => setConfirmReset(true)}
-              className="flex items-center gap-1.5 px-4 py-2.5 border border-slate-200 text-slate-600 text-[13px] font-semibold rounded-xl hover:bg-slate-50 transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2.5 border border-slate-200 text-slate-600 text-[13px] font-semibold rounded-xl hover:bg-slate-50 transition-colors whitespace-nowrap"
             >
               <Trash2 size={13} /> Reset to Default
             </button>

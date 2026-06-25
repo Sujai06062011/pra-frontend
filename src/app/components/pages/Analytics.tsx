@@ -84,7 +84,7 @@ export function Analytics() {
     <div className="p-7 space-y-6">
 
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard icon={<Users size={20} className="text-emerald-600" />} label="Total Patients (Jun)" value="187" change="+11.3%" up={true} color="bg-emerald-50" />
         <KpiCard icon={<Calendar size={20} className="text-blue-600" />} label="Avg Daily Appts" value="14.2" change="+2.1%" up={true} color="bg-blue-50" />
         <KpiCard icon={<Star size={20} className="text-amber-600" />} label="Patient Satisfaction" value="4.7/5" change="+0.2" up={true} color="bg-amber-50" />
@@ -92,10 +92,10 @@ export function Analytics() {
       </div>
 
       {/* Charts row 1 */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Monthly trend */}
-        <div className="col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <div className="flex items-center justify-between mb-5">
             <div>
               <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15 }} className="text-slate-800">Patient Volume Trend</h3>
@@ -154,7 +154,7 @@ export function Analytics() {
       </div>
 
       {/* Charts row 2 */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Age groups */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">

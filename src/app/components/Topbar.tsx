@@ -15,6 +15,9 @@ const pageTitles: Record<Page, string> = {
   analytics: "Analytics",
   settings: "Clinic Settings",
   medicines: "Medicines",
+  "medicines-alerts": "Medicines",
+  "dispensary": "Dispensary",
+  "consultations": "Online Consultations",
   "new-appointment": "New Appointment",
   "register-patient": "Register Patient",
   "new-prescription": "New Prescription",
@@ -25,7 +28,7 @@ export function Topbar({ activePage }: { activePage: Page }) {
   const dateStr = now.toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
 
   return (
-    <header className="h-16 bg-white border-b border-slate-100 flex items-center px-7 gap-4 sticky top-0 z-40 shadow-sm">
+    <header className="h-16 bg-white border-b border-slate-100 flex items-center px-7 gap-4 sticky top-0 z-40 shadow-sm pl-16 md:pl-7">
       <div className="flex-1">
         <h1 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 17 }} className="text-slate-800">
           {pageTitles[activePage]}
@@ -49,7 +52,7 @@ export function Topbar({ activePage }: { activePage: Page }) {
       </div>
 
       {/* Live dot */}
-      <div className="flex items-center gap-1.5 text-[12px] font-medium text-emerald-600">
+      <div className="hidden md:flex items-center gap-1.5 text-[12px] font-medium text-emerald-600">
         <span className="relative flex h-2 w-2">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>

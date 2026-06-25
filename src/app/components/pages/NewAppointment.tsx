@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, Search, Calendar, CheckCircle2, User, Ban } from "lucide-react";
+import { ArrowLeft, Search, Calendar, CheckCircle2, Ban, Video, Building2 } from "lucide-react";
 import { api } from "../../../lib/api";
-import type { Patient, SlotInfo, BookingResult, SlotsResponse } from "../../../lib/api";
+import type { Patient, SlotInfo, BookingResult, SlotsResponse, OnlineSlot, OnlineSlotsResponse } from "../../../lib/api";
 
 const DOCTOR_ID = "8c33abe0-5d2e-4613-9437-c7c375e8d162";
 
@@ -91,6 +91,57 @@ function SlotGrid({
   );
 }
 
+function OnlineSlotSection({
+  label,
+  slots,
+  globalIndex,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  slots: OnlineSlot[];
+  globalIndex: number; // starting O-token offset
+  selected: string;
+  onSelect: (t: string) => void;
+}) {
+  if (slots.length === 0) return null;
+  const range = `${slots[0].display} – ${slots[slots.length - 1].display}`;
+  return (
+    <div className="mb-5">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[13px] font-semibold text-blue-700">{label}</span>
+        <span className="text-[11px] text-slate-400">{range}</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {slots.map((slot, i) => {
+          const isSelected = selected === slot.time;
+          const isDisabled = !slot.available || slot.past;
+          const tokenLabel = `O${globalIndex + i + 1}`;
+          const bg = isDisabled
+            ? "bg-gray-200 text-gray-400 border-gray-200 cursor-not-allowed opacity-50"
+            : isSelected
+            ? "bg-blue-600 text-white border-blue-600 shadow-md"
+            : "bg-blue-50 text-blue-700 border-blue-200 hover:border-blue-400 cursor-pointer";
+          return (
+            <button
+              key={slot.time}
+              disabled={isDisabled}
+              title={slot.past ? "Passed" : !slot.available ? "Booked" : `Token ${tokenLabel}`}
+              onClick={isDisabled ? undefined : () => onSelect(slot.time)}
+              className={`flex flex-col items-center px-3 py-2 rounded-xl border text-[12px] font-semibold transition-all min-w-[64px] ${bg}`}
+            >
+              <span>{slot.display}</span>
+              <span className={`text-[10px] mt-0.5 font-bold ${isDisabled ? "text-gray-400" : isSelected ? "text-blue-100" : "text-blue-500"}`}>
+                {slot.past ? "Past" : !slot.available ? "Booked" : tokenLabel}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function NewAppointment({
   patientId: patientIdProp = "",
   onNavigate,
@@ -113,7 +164,10 @@ export function NewAppointment({
   // Booking step state
   const [dateMode, setDateMode] = useState<"today" | "tomorrow" | "other">("today");
   const [customDate, setCustomDate] = useState("");
+  const [consultType, setConsultType] = useState<"in_clinic" | "online">("in_clinic");
+  const [onlineEnabled, setOnlineEnabled] = useState(false);
   const [slotsResponse, setSlotsResponse] = useState<SlotsResponse | null>(null);
+  const [onlineSlotsResponse, setOnlineSlotsResponse] = useState<OnlineSlotsResponse | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState("");
   const [visitType, setVisitType] = useState("New Visit");
@@ -121,11 +175,19 @@ export function NewAppointment({
   const [bookError, setBookError] = useState("");
   const [result, setResult] = useState<BookingResult | null>(null);
   const slotsCache = useRef<Record<string, SlotsResponse>>({});
+  const onlineSlotsCache = useRef<Record<string, OnlineSlotsResponse>>({});
 
   const appointmentDate =
     dateMode === "today" ? todayStr() :
     dateMode === "tomorrow" ? tomorrowStr() :
     customDate;
+
+  // Load doctor's online settings
+  useEffect(() => {
+    api.doctors.getOnlineSettings(DOCTOR_ID)
+      .then(s => setOnlineEnabled(!!s.online_consultation_enabled))
+      .catch(() => {});
+  }, []);
 
   // Load preset patient
   useEffect(() => {
@@ -148,21 +210,34 @@ export function NewAppointment({
     }, 300);
   }, [search]);
 
-  // Load slots (with availability) when date changes — cached per date per session
+  // Load slots when date or consult type changes
   useEffect(() => {
     if (!appointmentDate || step !== "book-slot") return;
-    if (slotsCache.current[appointmentDate]) {
-      setSlotsResponse(slotsCache.current[appointmentDate]);
-      setSelectedSlot("");
-      return;
-    }
-    setSlotsLoading(true);
-    setSlotsResponse(null);
     setSelectedSlot("");
-    api.appointments.slots(DOCTOR_ID, appointmentDate)
-      .then(r => { slotsCache.current[appointmentDate] = r; setSlotsResponse(r); })
-      .catch(() => {}).finally(() => setSlotsLoading(false));
-  }, [appointmentDate, step]);
+    setSlotsLoading(true);
+
+    if (consultType === "online") {
+      if (onlineSlotsCache.current[appointmentDate]) {
+        setOnlineSlotsResponse(onlineSlotsCache.current[appointmentDate]);
+        setSlotsLoading(false);
+        return;
+      }
+      setOnlineSlotsResponse(null);
+      api.appointments.onlineSlots(DOCTOR_ID, appointmentDate)
+        .then(r => { onlineSlotsCache.current[appointmentDate] = r; setOnlineSlotsResponse(r); })
+        .catch(() => {}).finally(() => setSlotsLoading(false));
+    } else {
+      if (slotsCache.current[appointmentDate]) {
+        setSlotsResponse(slotsCache.current[appointmentDate]);
+        setSlotsLoading(false);
+        return;
+      }
+      setSlotsResponse(null);
+      api.appointments.slots(DOCTOR_ID, appointmentDate)
+        .then(r => { slotsCache.current[appointmentDate] = r; setSlotsResponse(r); })
+        .catch(() => {}).finally(() => setSlotsLoading(false));
+    }
+  }, [appointmentDate, step, consultType]);
 
   const slots: SlotInfo[] = slotsResponse?.slots ?? [];
   const morningSlots = slots.filter(s => s.session === "morning");
@@ -181,6 +256,7 @@ export function NewAppointment({
         appointment_date: appointmentDate,
         appointment_time: selectedSlot,
         visit_type: visitType,
+        consultation_type: consultType,
       });
       setResult(res);
       setStep("success");
@@ -199,6 +275,7 @@ export function NewAppointment({
     setSelectedSlot("");
     setDateMode("today");
     setCustomDate("");
+    setConsultType("in_clinic");
     setVisitType("New Visit");
     setResult(null);
     setBookError("");
@@ -304,6 +381,36 @@ export function NewAppointment({
               </div>
 
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-6">
+
+                {/* Visit type: In Clinic / Online */}
+                {onlineEnabled && (
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-3">Consultation Type</label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setConsultType("in_clinic"); setSelectedSlot(""); }}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-semibold border transition-all ${
+                          consultType === "in_clinic"
+                            ? "bg-emerald-500 text-white border-emerald-500"
+                            : "bg-white text-slate-600 border-slate-200 hover:border-emerald-300"
+                        }`}
+                      >
+                        <Building2 size={14} /> In Clinic
+                      </button>
+                      <button
+                        onClick={() => { setConsultType("online"); setSelectedSlot(""); }}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-semibold border transition-all ${
+                          consultType === "online"
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                        }`}
+                      >
+                        <Video size={14} /> Online Consultation
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Date selection */}
                 <div>
                   <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-3">Appointment Date</label>
@@ -343,6 +450,29 @@ export function NewAppointment({
                         <div key={i} className="w-16 h-12 bg-slate-100 rounded-xl animate-pulse" />
                       ))}
                     </div>
+                  ) : consultType === "online" ? (
+                    onlineSlotsResponse && !onlineSlotsResponse.enabled ? (
+                      <div className="text-[13px] text-slate-400">Online consultations not enabled.</div>
+                    ) : onlineSlotsResponse && !onlineSlotsResponse.day_has_hours ? (
+                      <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                        <Ban size={16} className="text-amber-500 flex-shrink-0" />
+                        <div className="text-[13px] font-semibold text-amber-700">
+                          No online consultation hours for {new Date(appointmentDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long" })}
+                        </div>
+                      </div>
+                    ) : (onlineSlotsResponse?.slots ?? []).length === 0 ? (
+                      <div className="text-[13px] text-slate-400">No online slots available for this date.</div>
+                    ) : (() => {
+                      const allOnline = onlineSlotsResponse!.slots;
+                      const morningOnline = allOnline.filter(s => s.session === "morning");
+                      const eveningOnline = allOnline.filter(s => s.session !== "morning");
+                      return (
+                        <>
+                          <OnlineSlotSection label="🌅 Morning" slots={morningOnline} globalIndex={0} selected={selectedSlot} onSelect={setSelectedSlot} />
+                          <OnlineSlotSection label="🌆 Evening" slots={eveningOnline} globalIndex={morningOnline.length} selected={selectedSlot} onSelect={setSelectedSlot} />
+                        </>
+                      );
+                    })()
                   ) : slotsResponse?.is_holiday ? (
                     <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
                       <Ban size={16} className="text-rose-500 flex-shrink-0" />
@@ -396,30 +526,51 @@ export function NewAppointment({
                 </div>
 
                 {/* Token preview */}
-                {slots.length > 0 && (() => {
-                  const mi = morningSlots.findIndex(s => s.time === selectedSlot);
-                  const ei = eveningSlots.findIndex(s => s.time === selectedSlot);
-                  const selToken = mi >= 0 ? `M${mi + 1}` : ei >= 0 ? `E${ei + 1}` : null;
-                  return (
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-                      {selToken ? (
-                        <div className="text-[12px] text-emerald-600 font-semibold">
-                          Token will be: <span className="text-emerald-700 text-[16px]">{selToken}</span>
+                {consultType === "online" ? (
+                  onlineSlotsResponse && (onlineSlotsResponse.slots.length > 0) && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+                      {selectedSlot ? (() => {
+                        const allOnline = onlineSlotsResponse?.slots ?? [];
+                        const oi = allOnline.findIndex(s => s.time === selectedSlot);
+                        return (
+                          <div className="text-[12px] text-blue-700 font-semibold">
+                            Token will be: <span className="text-blue-800 text-[16px]">O{oi + 1}</span>
+                          </div>
+                        );
+                      })() : (
+                        <div className="text-[12px] text-blue-700 font-semibold">
+                          Available Online Slots: <span className="text-blue-800">{(onlineSlotsResponse?.slots ?? []).filter(s => s.available).length}/{(onlineSlotsResponse?.slots ?? []).length}</span>
                         </div>
-                      ) : (
-                        <>
-                          <div className="text-[12px] text-emerald-600 font-semibold">
-                            Total Available Morning Tokens: <span className="text-emerald-700">{morningSlots.filter(s => s.available).length}/{morningSlots.length}</span>
-                          </div>
-                          <div className="text-[12px] text-emerald-600 font-semibold mt-0.5">
-                            Total Available Evening Tokens: <span className="text-emerald-700">{eveningSlots.filter(s => s.available).length}/{eveningSlots.length}</span>
-                          </div>
-                        </>
                       )}
-                      <div className="text-[11px] text-emerald-500 mt-0.5">For {formatDate(appointmentDate)}</div>
+                      <div className="text-[11px] text-blue-500 mt-0.5">Online Consultation · {formatDate(appointmentDate)}</div>
                     </div>
-                  );
-                })()}
+                  )
+                ) : (
+                  slots.length > 0 && (() => {
+                    const mi = morningSlots.findIndex(s => s.time === selectedSlot);
+                    const ei = eveningSlots.findIndex(s => s.time === selectedSlot);
+                    const selToken = mi >= 0 ? `M${mi + 1}` : ei >= 0 ? `E${ei + 1}` : null;
+                    return (
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                        {selToken ? (
+                          <div className="text-[12px] text-emerald-600 font-semibold">
+                            Token will be: <span className="text-emerald-700 text-[16px]">{selToken}</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="text-[12px] text-emerald-600 font-semibold">
+                              Total Available Morning Tokens: <span className="text-emerald-700">{morningSlots.filter(s => s.available).length}/{morningSlots.length}</span>
+                            </div>
+                            <div className="text-[12px] text-emerald-600 font-semibold mt-0.5">
+                              Total Available Evening Tokens: <span className="text-emerald-700">{eveningSlots.filter(s => s.available).length}/{eveningSlots.length}</span>
+                            </div>
+                          </>
+                        )}
+                        <div className="text-[11px] text-emerald-500 mt-0.5">For {formatDate(appointmentDate)}</div>
+                      </div>
+                    );
+                  })()
+                )}
 
                 {bookError && (
                   <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 text-[13px] text-rose-700">{bookError}</div>
@@ -439,7 +590,7 @@ export function NewAppointment({
                     disabled={booking || !selectedSlot || (dateMode === "other" && !customDate)}
                     className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-[13px] font-semibold rounded-xl shadow-sm shadow-emerald-200 transition-colors disabled:opacity-50"
                   >
-                    {booking ? "Booking…" : "Book & Send WhatsApp →"}
+                    {booking ? "Booking…" : consultType === "online" ? "Book Online & Send Link →" : "Book & Send WhatsApp →"}
                   </button>
                 </div>
               </div>
@@ -453,7 +604,7 @@ export function NewAppointment({
                 <CheckCircle2 size={32} className="text-emerald-500" />
               </div>
               <h2 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 22 }} className="text-slate-800 mb-2">
-                Appointment Booked!
+                {result?.consultation_type === "online" ? "Online Consultation Booked! 🎥" : "Appointment Booked!"}
               </h2>
 
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 text-left mt-6 mb-6 space-y-2">

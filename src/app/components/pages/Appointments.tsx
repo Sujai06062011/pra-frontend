@@ -540,7 +540,8 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
 
       {/* Table */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <table className="w-full">
+        <div className="overflow-x-auto">
+        <table className="min-w-[700px] w-full">
           <thead>
             <tr className="bg-slate-50">
               {/* Checkbox header */}
@@ -653,6 +654,7 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Floating bottom bar when selection is active */}

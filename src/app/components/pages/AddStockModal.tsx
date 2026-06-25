@@ -72,9 +72,10 @@ export function AddStockModal({ medicine, onClose, onSaved }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
       <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl border border-slate-200 shadow-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-white rounded-t-2xl md:rounded-2xl border border-slate-200 shadow-2xl p-6 w-full md:max-w-lg md:mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="md:hidden w-10 h-1 bg-gray-300 rounded-full mx-auto -mt-3 mb-3" />
         <div className="flex items-center justify-between mb-5">
           <div>
             <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15 }} className="text-slate-800">

@@ -1,14 +1,19 @@
+import { useState } from "react";
 import {
   LayoutDashboard, CalendarDays, Users, Hash, Pill, FlaskConical,
   MessageCircle, Phone, Star, BarChart3, Settings, ChevronRight,
-  Stethoscope, LogOut, Tablets, UserPlus, CalendarPlus, CalendarClock
+  Stethoscope, LogOut, Tablets, UserPlus, CalendarPlus, CalendarClock,
+  ShoppingBag, Video, Menu, X,
 } from "lucide-react";
 
 export type Page =
   | "dashboard" | "appointments" | "availability" | "queue" | "patients"
   | "prescriptions" | "medicines" | "lab" | "queries" | "followups"
   | "reviews" | "analytics" | "settings"
-  | "new-appointment" | "register-patient" | "new-prescription";
+  | "new-appointment" | "register-patient" | "new-prescription"
+  | "medicines-alerts"
+  | "dispensary"
+  | "consultations";
 
 interface NavItem { icon: React.ReactNode; label: string; page: Page; badge?: number; badgeColor?: string; }
 
@@ -27,7 +32,9 @@ const navSections: { label: string; items: NavItem[] }[] = [
     label: "Clinical",
     items: [
       { icon: <Pill size={16} />, label: "Prescriptions", page: "prescriptions" },
+      { icon: <Video size={16} />, label: "Consultations", page: "consultations", badgeColor: "blue" },
       { icon: <Tablets size={16} />, label: "Medicines", page: "medicines" },
+      { icon: <ShoppingBag size={16} />, label: "Dispensary", page: "dispensary", badgeColor: "violet" },
       { icon: <FlaskConical size={16} />, label: "Lab Reports", page: "lab", badgeColor: "blue" },
       { icon: <MessageCircle size={16} />, label: "Queries", page: "queries", badgeColor: "red" },
     ],
@@ -61,21 +68,56 @@ export function Sidebar({
   queriesBadge = 0,
   followupsBadge = 0,
   appointmentsBadge = 0,
+  consultationsBadge = 0,
 }: {
   activePage: Page;
   onNavigate: (p: Page) => void;
   queriesBadge?: number;
   followupsBadge?: number;
   appointmentsBadge?: number;
+  consultationsBadge?: number;
 }) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   const dynamicBadges: Partial<Record<Page, number>> = {
-    queries: queriesBadge,
-    followups: followupsBadge,
-    appointments: appointmentsBadge,
+    queries:       queriesBadge,
+    followups:     followupsBadge,
+    appointments:  appointmentsBadge,
+    consultations: consultationsBadge,
+  };
+
+  const handleNavigate = (p: Page) => {
+    onNavigate(p);
+    setMobileMenuOpen(false);
   };
 
   return (
-    <aside className="fixed left-0 top-0 bottom-0 w-60 bg-white border-r border-slate-100 flex flex-col z-50 shadow-sm">
+    <>
+      {/* Hamburger button — mobile only */}
+      <button
+        className="lg:hidden fixed top-4 left-4 z-50 bg-white border border-gray-200 rounded-lg p-2 shadow-md"
+        onClick={() => setMobileMenuOpen(true)}
+      >
+        <Menu className="w-5 h-5 text-gray-600" />
+      </button>
+
+      {/* Overlay — mobile only */}
+      <div
+        className={`lg:hidden fixed inset-0 bg-black/50 z-40 transition-opacity ${mobileMenuOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        onClick={() => setMobileMenuOpen(false)}
+      />
+
+    <aside className={`fixed left-0 top-0 bottom-0 bg-white border-r border-slate-100 flex flex-col z-50 shadow-sm
+      w-60
+      transition-transform duration-300
+      lg:translate-x-0
+      ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+    `}>
+      {/* Close button — mobile only */}
+      <button className="lg:hidden absolute top-4 right-4 z-10" onClick={() => setMobileMenuOpen(false)}>
+        <X className="w-5 h-5 text-slate-500" />
+      </button>
+
       {/* Logo */}
       <div className="px-5 py-5 border-b border-slate-100">
         <div className="flex items-center gap-3">
@@ -100,14 +142,14 @@ export function Sidebar({
       {/* Quick Actions */}
       <div className="px-3 pt-3 pb-1 space-y-1.5">
         <button
-          onClick={() => onNavigate("new-appointment")}
+          onClick={() => handleNavigate("new-appointment")}
           className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all ${activePage === "new-appointment" ? "text-white bg-emerald-600 shadow-sm" : "text-white bg-emerald-500 hover:bg-emerald-600 shadow-sm shadow-emerald-200"}`}
         >
           <CalendarPlus size={15} />
           New Appointment
         </button>
         <button
-          onClick={() => onNavigate("register-patient")}
+          onClick={() => handleNavigate("register-patient")}
           className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-all ${activePage === "register-patient" ? "text-violet-800 bg-violet-100 border border-violet-300" : "text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200"}`}
         >
           <UserPlus size={15} className="text-violet-500" />
@@ -128,7 +170,7 @@ export function Sidebar({
                 return (
                   <button
                     key={item.page}
-                    onClick={() => onNavigate(item.page)}
+                    onClick={() => handleNavigate(item.page)}
                     className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 group ${
                       isActive
                         ? "bg-emerald-500 text-white shadow-md shadow-emerald-200"
@@ -172,5 +214,6 @@ export function Sidebar({
         </div>
       </div>
     </aside>
+    </>
   );
 }

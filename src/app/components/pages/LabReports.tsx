@@ -20,7 +20,7 @@ const statusConfig = {
 export function LabReports() {
   return (
     <div className="p-7 space-y-5">
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: "Critical", count: reports.filter(r => r.status === "critical").length, cls: "bg-rose-50 border-rose-200 text-rose-700" },
           { label: "Needs Review", count: reports.filter(r => r.status === "review").length, cls: "bg-amber-50 border-amber-200 text-amber-700" },
@@ -39,7 +39,8 @@ export function LabReports() {
           <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15 }} className="text-slate-800">Pending & Recent Reports</h3>
           <span className="text-[12px] text-slate-400">{reports.length} total</span>
         </div>
-        <table className="w-full">
+        <div className="overflow-x-auto">
+        <table className="min-w-[600px] w-full">
           <thead>
             <tr className="bg-slate-50">
               {["Patient", "Test", "Lab", "Received", "Result", "Status", "Action"].map(h => (
@@ -93,6 +94,7 @@ export function LabReports() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sidebar } from "./components/Sidebar";
 import type { Page } from "./components/Sidebar";
 import { useQueries, useFollowUps, useTodayAppointments } from "../hooks/usePRAData";
@@ -19,17 +19,40 @@ import { NewAppointment } from "./components/pages/NewAppointment";
 import { PatientRegistration } from "./components/pages/PatientRegistration";
 import { PrescriptionWriter } from "./components/pages/PrescriptionWriter";
 import { Availability } from "./components/pages/Availability";
+import { Dispensary } from "./components/pages/Dispensary";
+import { ConsultationsPage } from "./components/pages/ConsultationsPage";
+import { api } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 
 export default function App() {
+  const { doctorId } = useAuth();
   const [activePage, setActivePage] = useState<Page>("dashboard");
   const [newApptPatientId, setNewApptPatientId] = useState<string>("");
   const [rxParams, setRxParams] = useState<{ patientId?: string; appointmentId?: string; prescriptionId?: string }>({});
   const { data: queries } = useQueries();
   const { data: followUps } = useFollowUps();
   const { data: todayAppointments } = useTodayAppointments();
-  const queriesBadge = queries.filter(q => q.status === "Pending").length;
-  const followupsBadge = followUps.filter(f => !f.completed_at).length;
+  const [consultationsBadge, setConsultationsBadge] = useState(0);
+
+  const queriesBadge     = queries.filter(q => q.status === "Pending").length;
+  const followupsBadge   = followUps.filter(f => !f.completed_at).length;
   const appointmentsBadge = todayAppointments.filter(a => a.status !== "Cancelled").length;
+
+  // Poll today's active consultations for badge count
+  useEffect(() => {
+    async function fetchBadge() {
+      try {
+        const res = await api.consultations.today(doctorId);
+        const active = res.consultations.filter(c =>
+          ["scheduled", "waiting", "in_progress"].includes(c.status)
+        ).length;
+        setConsultationsBadge(active);
+      } catch {/* non-critical */ }
+    }
+    fetchBadge();
+    const t = setInterval(fetchBadge, 60_000);
+    return () => clearInterval(t);
+  }, [doctorId]);
 
   const goToNewAppt = (patientId = "") => {
     setNewApptPatientId(patientId);
@@ -50,6 +73,9 @@ export default function App() {
         />
       );
       case "medicines": return <ClinicMedicines />;
+      case "medicines-alerts": return <ClinicMedicines initialTab="alerts" />;
+      case "dispensary": return <Dispensary />;
+      case "consultations": return <ConsultationsPage />;
       case "lab": return <LabReports />;
       case "queries": return <Queries />;
       case "followups": return <FollowUps />;
@@ -85,8 +111,15 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-      <Sidebar activePage={activePage} onNavigate={setActivePage} queriesBadge={queriesBadge} followupsBadge={followupsBadge} appointmentsBadge={appointmentsBadge} />
-      <div className="ml-60 flex flex-col min-h-screen">
+      <Sidebar
+        activePage={activePage}
+        onNavigate={setActivePage}
+        queriesBadge={queriesBadge}
+        followupsBadge={followupsBadge}
+        appointmentsBadge={appointmentsBadge}
+        consultationsBadge={consultationsBadge}
+      />
+      <div className="lg:ml-60 ml-0 flex flex-col min-h-screen">
         <Topbar activePage={activePage} />
         <main className="flex-1 overflow-y-auto">
           {renderPage()}

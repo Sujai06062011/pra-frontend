@@ -42,8 +42,8 @@ export function Reviews() {
       )}
 
       {/* Summary */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl p-6 text-white shadow-lg shadow-amber-200 col-span-1 flex flex-col items-center justify-center text-center">
+      <div className="flex flex-col sm:grid sm:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl p-6 text-white shadow-lg shadow-amber-200 sm:col-span-1 flex flex-col items-center justify-center text-center">
           <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 52, lineHeight: 1 }}>
             {loading ? "…" : avgRating.toFixed(1)}
           </div>
@@ -53,7 +53,7 @@ export function Reviews() {
         </div>
 
         {/* Rating distribution */}
-        <div className="col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+        <div className="sm:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 14 }} className="text-slate-800 mb-4">Rating Breakdown</h3>
           <ResponsiveContainer width="100%" height={130}>
             <BarChart data={ratingDist} layout="vertical" barSize={10}>
@@ -66,7 +66,7 @@ export function Reviews() {
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col justify-center gap-2">
+        <div className="sm:col-span-1 bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col justify-center gap-2">
           <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 28 }} className="text-slate-800">
             {loading ? "…" : reviews.length}
           </div>
@@ -84,7 +84,7 @@ export function Reviews() {
       ) : reviews.length === 0 ? (
         <div className="text-center py-10 text-[13px] text-slate-400">No reviews yet</div>
       ) : (
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {reviews.map((r, idx) => {
           const name = r.patients?.name || "Patient";
           const color = avatarColors[idx % avatarColors.length];

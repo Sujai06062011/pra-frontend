@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { api, type Patient, type VisitVitals } from "../../../lib/api";
 import { VitalsSection } from "../shared/VitalsSection";
-import { MedicineRow, type MedicineFormRow } from "../prescription/MedicineRow";
+import { MedicineRow, makeDefaultTimings, type MedicineFormRow } from "../prescription/MedicineRow";
 import {
   DIAGNOSIS_SUGGESTIONS, DIETARY_NOTES_OPTIONS,
   PRECAUTION_OPTIONS,
@@ -22,11 +22,7 @@ function makeEmptyMed(): MedicineFormRow {
     form: "tablet",
     dosage: "",
     duration_days: 5,
-    morning: false,
-    afternoon: false,
-    evening: false,
-    night: false,
-    before_food: false,
+    timings: makeDefaultTimings(),
     instructions: "",
   };
 }
@@ -379,19 +375,25 @@ export function PrescriptionWriter({
         } else {
           setForm(f => ({ ...f, dietary_instructions: pres.dietary_instructions || "", precautions: pres.precautions || "" }));
         }
-        const meds: MedicineFormRow[] = ((pres.prescription_medicines ?? []) as any[]).map((m: any) => ({
-          id: crypto.randomUUID(),
-          medicine_name: m.medicine_name || "",
-          form: "tablet",
-          dosage: m.dosage || "",
-          duration_days: m.duration_days ?? 5,
-          morning: !!m.morning,
-          afternoon: !!m.afternoon,
-          evening: !!m.evening,
-          night: !!m.night,
-          before_food: !!m.before_food,
-          instructions: m.instructions || "",
-        }));
+        const meds: MedicineFormRow[] = ((pres.prescription_medicines ?? []) as any[]).map((m: any) => {
+          const bf = !!m.before_food;
+          const tdRaw = m.timing_details || {};
+          return {
+            id: crypto.randomUUID(),
+            medicine_id: m.medicine_id || undefined,
+            medicine_name: m.medicine_name || "",
+            form: "tablet",
+            dosage: m.dosage || "",
+            duration_days: m.duration_days ?? 5,
+            timings: {
+              morning:   { enabled: !!m.morning,   qty: tdRaw.morning?.qty   ?? (m.qty_per_dose ?? 1), before_food: tdRaw.morning?.before_food   ?? bf },
+              afternoon: { enabled: !!m.afternoon, qty: tdRaw.afternoon?.qty ?? (m.qty_per_dose ?? 1), before_food: tdRaw.afternoon?.before_food ?? bf },
+              evening:   { enabled: !!m.evening,   qty: tdRaw.evening?.qty   ?? (m.qty_per_dose ?? 1), before_food: tdRaw.evening?.before_food   ?? bf },
+              night:     { enabled: !!m.night,     qty: tdRaw.night?.qty     ?? (m.qty_per_dose ?? 1), before_food: tdRaw.night?.before_food     ?? bf },
+            },
+            instructions: m.instructions || "",
+          };
+        });
         setMedicines(meds.length > 0 ? meds : [makeEmptyMed()]);
         setLoadingPatient(false);
       }).catch(() => setLoadingPatient(false));
@@ -462,8 +464,18 @@ export function PrescriptionWriter({
   function handlePrint() {
     const today = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
     const medLines = medicines.filter(m => m.medicine_name.trim()).map((m, i) => {
-      const times = [m.morning && "Morning", m.afternoon && "Afternoon", m.evening && "Evening", m.night && "Night"].filter(Boolean).join(" + ");
-      return `<div class="medicine"><p><strong>${i+1}. ${m.medicine_name}</strong> — ${m.dosage || ""}</p><p style="color:#555">${times || "—"} | ${m.before_food ? "Before food" : "After food"} | ${m.duration_days} days</p>${m.instructions ? `<p style="color:#777;font-style:italic">${m.instructions}</p>` : ""}</div>`;
+      const { morning, afternoon, evening, night } = m.timings;
+      const timingParts = (
+        [
+          morning.enabled   && `Morning (${morning.qty})`,
+          afternoon.enabled && `Afternoon (${afternoon.qty})`,
+          evening.enabled   && `Evening (${evening.qty})`,
+          night.enabled     && `Night (${night.qty})`,
+        ] as (string | false)[]
+      ).filter(Boolean).join(" + ");
+      const firstEnabled = [morning, afternoon, evening, night].find(t => t.enabled);
+      const foodStr = firstEnabled ? (firstEnabled.before_food ? "Before food" : "After food") : "";
+      return `<div class="medicine"><p><strong>${i+1}. ${m.medicine_name}</strong> — ${m.dosage || ""}</p><p style="color:#555">${timingParts || "—"} | ${foodStr} | ${m.duration_days} days</p>${m.instructions ? `<p style="color:#777;font-style:italic">${m.instructions}</p>` : ""}</div>`;
     }).join("");
     const patName = patient?.name || linkedPatient?.name || walkinName || "—";
     const patAge = patient?.age || linkedPatient?.age || walkinAge || "—";
@@ -483,17 +495,41 @@ export function PrescriptionWriter({
     if (!form.diagnosis.trim()) newErrors.diagnosis = "Diagnosis is required";
     const validMeds = medicines.filter(m => m.medicine_name.trim());
     if (validMeds.length === 0) newErrors.medicines = "Add at least one medicine";
-    const missingTiming = validMeds.find(m => !m.morning && !m.afternoon && !m.evening && !m.night);
+    const missingTiming = validMeds.find(m =>
+      !m.timings.morning.enabled && !m.timings.afternoon.enabled &&
+      !m.timings.evening.enabled && !m.timings.night.enabled
+    );
     if (missingTiming) newErrors.timing = `Select timing for "${missingTiming.medicine_name}"`;
     if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
     setErrors({});
     setSaving(true);
 
-    const medPayload = validMeds.map((m, i) => ({
-      medicine_name: m.medicine_name, dosage: m.dosage, duration_days: m.duration_days,
-      morning: m.morning, afternoon: m.afternoon, evening: m.evening, night: m.night,
-      before_food: m.before_food, instructions: m.instructions, sort_order: i + 1,
-    }));
+    const medPayload = validMeds.map((m, i) => {
+      const { morning, afternoon, evening, night } = m.timings;
+      // Build timing_details only for enabled timings
+      const timing_details: Record<string, { qty: number; before_food: boolean }> = {};
+      if (morning.enabled)   timing_details.morning   = { qty: morning.qty,   before_food: morning.before_food };
+      if (afternoon.enabled) timing_details.afternoon = { qty: afternoon.qty, before_food: afternoon.before_food };
+      if (evening.enabled)   timing_details.evening   = { qty: evening.qty,   before_food: evening.before_food };
+      if (night.enabled)     timing_details.night     = { qty: night.qty,     before_food: night.before_food };
+      // Backward-compat global fields: use first enabled timing's before_food, sum qty as qty_per_dose
+      const firstEnabled = [morning, afternoon, evening, night].find(t => t.enabled);
+      return {
+        medicine_id:    m.medicine_id || undefined,
+        medicine_name:  m.medicine_name,
+        dosage:         m.dosage,
+        qty_per_dose:   firstEnabled?.qty ?? 1,
+        duration_days:  m.duration_days,
+        morning:        morning.enabled,
+        afternoon:      afternoon.enabled,
+        evening:        evening.enabled,
+        night:          night.enabled,
+        before_food:    firstEnabled?.before_food ?? false,
+        timing_details,
+        instructions:   m.instructions,
+        sort_order:     i + 1,
+      };
+    });
 
     // Vitals save together with the prescription (best-effort, non-blocking)
     if (visitId && hasAnyVital) {
@@ -581,7 +617,7 @@ export function PrescriptionWriter({
 
       {/* ── Sticky header ── */}
       <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
-        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center gap-4">
+        <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center gap-2 md:gap-4 flex-wrap">
           <button
             onClick={() => { if (onNavigate) onNavigate("prescriptions"); else window.history.back(); }}
             className="flex items-center gap-1.5 text-slate-500 hover:text-slate-700 text-[13px] px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
@@ -669,10 +705,10 @@ export function PrescriptionWriter({
       )}
 
       {/* ── Body ── */}
-      <div className="max-w-6xl mx-auto px-6 py-6 flex gap-6">
+      <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 flex flex-col md:flex-row gap-6">
 
         {/* LEFT — main form */}
-        <div className="flex-1 space-y-5 min-w-0">
+        <div className="flex-1 space-y-5 min-w-0 w-full">
 
           {/* Patient lookup (only when no patient from props/URL) */}
           {showLookup && !isWalkin && (
@@ -846,7 +882,7 @@ export function PrescriptionWriter({
         </div>
 
         {/* RIGHT — patient info sidebar */}
-        <div className="w-72 flex-shrink-0 space-y-4">
+        <div className="w-full md:w-72 md:flex-shrink-0 space-y-4">
           {(patient || linkedPatient) ? (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden sticky top-20">
               <div className="bg-gradient-to-br from-violet-500 to-purple-600 px-5 py-4">

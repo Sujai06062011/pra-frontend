@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
-import { X, Loader2, Plus, AlertTriangle } from "lucide-react";
+import { X, Loader2, Plus } from "lucide-react";
 import { api, type ClinicMedicine, type MedicineStockBatch, type StockTransaction } from "../../../lib/api";
 import { AddStockModal } from "./AddStockModal";
+import { EditBatchModal } from "./EditBatchModal";
+import { AdjustStockModal } from "./AdjustStockModal";
 
 function formatDate(dateStr: string) {
   if (!dateStr) return "";
@@ -12,7 +14,9 @@ function formatDate(dateStr: string) {
 function formatDateTime(dateStr: string) {
   if (!dateStr) return "";
   const d = new Date(dateStr);
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  const date = d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  const time = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+  return `${date}, ${time}`;
 }
 
 interface Props {
@@ -27,9 +31,11 @@ export function MedicineStockDrawer({ medicine, onClose, onUpdated }: Props) {
   const [transactions, setTransactions] = useState<StockTransaction[]>([]);
   const [loadingBatches, setLoadingBatches] = useState(true);
   const [loadingTx, setLoadingTx] = useState(true);
-  const [threshold, setThreshold] = useState(medicine.low_stock_threshold?.toString() ?? "");
-  const [savingThreshold, setSavingThreshold] = useState(false);
+  const [thresholdInput, setThresholdInput] = useState(medicine.low_stock_threshold?.toString() ?? "");
+  const [isSavingThreshold, setIsSavingThreshold] = useState(false);
   const [showAddStock, setShowAddStock] = useState(false);
+  const [editingBatch, setEditingBatch] = useState<(MedicineStockBatch & { strips_editable: boolean }) | null>(null);
+  const [adjustingBatch, setAdjustingBatch] = useState<MedicineStockBatch | null>(null);
   const [writeoffBatch, setWriteoffBatch] = useState<MedicineStockBatch | null>(null);
   const [writeoffQty, setWriteoffQty] = useState("");
   const [writeoffReason, setWriteoffReason] = useState("expired");
@@ -53,15 +59,29 @@ export function MedicineStockDrawer({ medicine, onClose, onUpdated }: Props) {
 
   useEffect(() => { loadData(); }, [medicine.id]);
 
-  async function saveThreshold() {
-    setSavingThreshold(true);
+  async function openEditBatch(b: MedicineStockBatch) {
     try {
-      const val = threshold.trim() ? parseInt(threshold) : null;
-      await api.medicines.setThreshold(medicine.id, val);
+      const res = await api.medicines.editBatch(b.id, {});
+      setEditingBatch({ ...b, strips_editable: res.strips_editable });
+    } catch {
+      setEditingBatch({ ...b, strips_editable: false });
+    }
+  }
+
+  async function saveThreshold() {
+    setIsSavingThreshold(true);
+    try {
+      await api.medicines.setThreshold(medicine.id, thresholdInput.trim() ? parseInt(thresholdInput) : null);
       onUpdated();
     } finally {
-      setSavingThreshold(false);
+      setIsSavingThreshold(false);
     }
+  }
+
+  async function clearThreshold() {
+    await api.medicines.setThreshold(medicine.id, null);
+    setThresholdInput("");
+    onUpdated();
   }
 
   async function handleWriteoff() {
@@ -126,28 +146,48 @@ export function MedicineStockDrawer({ medicine, onClose, onUpdated }: Props) {
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
           {/* Low stock threshold */}
-          <div className="bg-slate-50 rounded-xl p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Low Stock Alert</p>
+          <div className="flex items-center gap-3 p-4 bg-orange-50 rounded-xl">
+            <div className="flex-1">
+              <label className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">
+                Low Stock Alert Threshold
+              </label>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Get alerted when stock falls below this amount
+              </p>
+            </div>
             <div className="flex items-center gap-2">
               <input
                 type="number"
                 min="1"
-                value={threshold}
-                onChange={e => setThreshold(e.target.value)}
                 placeholder="e.g. 100"
-                className="w-28 px-3 py-1.5 text-[13px] border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                value={thresholdInput}
+                onChange={e => setThresholdInput(e.target.value)}
+                className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-[13px] text-center focus:border-orange-400 focus:outline-none"
               />
-              <span className="text-[12px] text-slate-500">{dispenseUnit}s</span>
+              <span className="text-[11px] text-slate-500">{dispenseUnit}s</span>
               <button
                 onClick={saveThreshold}
-                disabled={savingThreshold}
-                className="ml-2 px-3 py-1.5 text-[12px] bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-medium disabled:opacity-50"
+                disabled={!thresholdInput || isSavingThreshold}
+                className="px-3 py-1.5 bg-orange-500 text-white text-[12px] font-medium rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
               >
-                {savingThreshold ? "Saving…" : "Save"}
+                {isSavingThreshold ? "Saving…" : "Save"}
               </button>
+              {medicine.low_stock_threshold && (
+                <button
+                  onClick={clearThreshold}
+                  className="px-2 py-1.5 text-[12px] text-slate-400 hover:text-slate-600"
+                  title="Remove threshold"
+                >
+                  ✕
+                </button>
+              )}
             </div>
-            <p className="text-[11px] text-slate-400 mt-1">Alert on dashboard when stock falls below this</p>
           </div>
+          {medicine.low_stock_threshold && (
+            <p className="text-[11px] text-orange-600 -mt-4 px-1">
+              Currently alerting when below <strong>{medicine.low_stock_threshold}</strong> {dispenseUnit}s
+            </p>
+          )}
 
           {/* Stock batches */}
           <div>
@@ -176,12 +216,26 @@ export function MedicineStockDrawer({ medicine, onClose, onUpdated }: Props) {
                         <td className="px-3 py-2.5 text-right text-slate-700">{b.tablets_remaining} {dispenseUnit}s</td>
                         <td className="px-3 py-2.5 text-center">{expiryLabel(b.expiry_status)}</td>
                         <td className="px-3 py-2.5">
-                          <button
-                            onClick={() => { setWriteoffBatch(b); setWriteoffQty(b.tablets_remaining.toString()); }}
-                            className="text-[11px] text-red-500 hover:text-red-700 whitespace-nowrap"
-                          >
-                            Write off
-                          </button>
+                          <div className="flex items-center gap-2 whitespace-nowrap">
+                            <button
+                              onClick={() => openEditBatch(b)}
+                              className="text-[11px] text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => setAdjustingBatch(b)}
+                              className="text-[11px] text-orange-600 hover:text-orange-800 font-medium"
+                            >
+                              Adjust
+                            </button>
+                            <button
+                              onClick={() => { setWriteoffBatch(b); setWriteoffQty(b.tablets_remaining.toString()); }}
+                              className="text-[11px] text-red-500 hover:text-red-700 font-medium"
+                            >
+                              Write off
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -259,6 +313,25 @@ export function MedicineStockDrawer({ medicine, onClose, onUpdated }: Props) {
           medicine={medicine}
           onClose={() => setShowAddStock(false)}
           onSaved={() => { setShowAddStock(false); loadData(); onUpdated(); }}
+        />
+      )}
+
+      {editingBatch && (
+        <EditBatchModal
+          batch={editingBatch}
+          medicine={medicine}
+          stripsEditable={editingBatch.strips_editable}
+          onClose={() => setEditingBatch(null)}
+          onSaved={() => { setEditingBatch(null); loadData(); onUpdated(); }}
+        />
+      )}
+
+      {adjustingBatch && (
+        <AdjustStockModal
+          batch={adjustingBatch}
+          medicine={medicine}
+          onClose={() => setAdjustingBatch(null)}
+          onSaved={() => { setAdjustingBatch(null); loadData(); onUpdated(); }}
         />
       )}
     </>

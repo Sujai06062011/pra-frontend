@@ -218,7 +218,7 @@ export function Patients() {
         ) : patients.length === 0 ? (
           <div className="text-center py-12 text-[13px] text-slate-400">No patients found</div>
         ) : (
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {patients.map((p, idx) => {
               const color = avatarColors[idx % avatarColors.length];
               const isSelected = selectedPatientId === p.id;

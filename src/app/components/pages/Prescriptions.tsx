@@ -44,7 +44,7 @@ export function Prescriptions({ onNewPrescription, onEditPrescription }: Prescri
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { label: "Total", value: loading ? "…" : prescriptions.length, cls: "bg-emerald-50 border-emerald-200 text-emerald-700", icon: <CheckCircle2 size={13} /> },
           { label: "With Medicines", value: loading ? "…" : prescriptions.filter(p => (p.prescription_medicines?.length ?? 0) > 0).length, cls: "bg-blue-50 border-blue-200 text-blue-700", icon: <Pill size={13} /> },
@@ -77,7 +77,7 @@ export function Prescriptions({ onNewPrescription, onEditPrescription }: Prescri
       ) : prescriptions.length === 0 ? (
         <div className="text-center py-12 text-[13px] text-slate-400">No prescriptions found</div>
       ) : (
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {withDays.map((p, idx) => {
           const isWalkin = !p.patient_id;
           const name = p.patients?.name || p.walkin_name || (isWalkin ? "Walk-in" : "Unknown");

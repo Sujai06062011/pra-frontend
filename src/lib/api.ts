@@ -64,6 +64,37 @@ export interface Prescription {
   patients?: Pick<Patient, "name" | "mobile" | "patient_code">;
 }
 
+export interface DispenseItem {
+  id: string;
+  dispense_order_id: string;
+  medicine_id?: string;
+  medicine_name: string;
+  dosage?: string;
+  qty_prescribed: number;
+  qty_dispensed: number;
+  status: "pending" | "dispensed" | "partial" | "external";
+  dispensed_at?: string;
+}
+
+export interface DispenseOrder {
+  id: string;
+  prescription_id: string;
+  doctor_id: string;
+  patient_id?: string;
+  patient_name?: string;
+  status: "pending" | "partial" | "completed" | "dismissed";
+  created_at: string;
+  updated_at?: string;
+  patients?: Pick<Patient, "name" | "mobile" | "patient_code">;
+  dispense_items?: DispenseItem[];
+}
+
+export interface DispenseAction {
+  item_id: string;
+  action: "dispense" | "external" | "pending";
+  qty?: number;
+}
+
 export interface FollowUp {
   id: string;
   doctor_id: string;
@@ -76,6 +107,41 @@ export interface FollowUp {
   created_at: string;
   completed_at?: string | null;
   patients?: Pick<Patient, "name" | "mobile" | "language">;
+}
+
+export type ConsultationStatus =
+  | "scheduled" | "waiting" | "in_progress" | "completed" | "missed" | "cancelled";
+
+export interface Consultation {
+  id: string;
+  appointment_id?: string;
+  patient_id: string;
+  doctor_id: string;
+  room_id: string;
+  room_url: string;
+  scheduled_at: string;
+  started_at?: string;
+  ended_at?: string;
+  duration_minutes?: number;
+  consultation_type: "online" | "in_clinic";
+  status: ConsultationStatus;
+  patient_link_sent: boolean;
+  patient_link_sent_at?: string;
+  recording_url?: string;
+  chief_complaint?: string;
+  doctor_notes?: string;
+  created_at: string;
+  updated_at?: string;
+  patients?: Pick<Patient, "name" | "mobile" | "language">;
+  doctors?: Pick<{ id: string; name: string; clinic_name: string }, "name" | "clinic_name">;
+}
+
+export interface DoctorToken {
+  token: string;
+  room_id: string;
+  app_id: string;
+  patient_name: string;
+  domain: string;
 }
 
 export interface Review {
@@ -345,14 +411,48 @@ export interface BookAppointmentPayload {
   appointment_date: string;
   appointment_time: string;
   visit_type: string;
+  consultation_type?: "in_clinic" | "online";
 }
 
 export interface BookingResult {
   appointment_id: string;
   token_number: number;
   display_token?: string | null;
+  consultation_type?: string;
   patient_name: string;
   whatsapp_sent: boolean;
+}
+
+export interface OnlineSlot {
+  time: string;
+  display: string;
+  session: "morning" | "evening";
+  available: boolean;
+  past: boolean;
+}
+
+export interface OnlineSlotsResponse {
+  enabled: boolean;
+  day_has_hours?: boolean;
+  slots: OnlineSlot[];
+}
+
+export interface OnlineDaySession {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+
+export interface OnlineDayEntry {
+  day: string;
+  morning: OnlineDaySession;
+  evening: OnlineDaySession;
+}
+
+export interface DoctorOnlineSettings {
+  online_consultation_enabled: boolean;
+  online_consultation_hours: OnlineDayEntry[];
+  online_consultation_fee: number;
 }
 
 export interface PrescriptionWritePayload {
@@ -365,14 +465,17 @@ export interface PrescriptionWritePayload {
   dietary_instructions?: string;
   precautions?: string;
   medicines: {
+    medicine_id?: string;
     medicine_name: string;
     dosage: string;
+    qty_per_dose?: number;
     duration_days: number;
     morning: boolean;
     afternoon: boolean;
     evening: boolean;
     night: boolean;
     before_food: boolean;
+    timing_details?: Record<string, { qty: number; before_food: boolean }>;
     instructions?: string;
     sort_order: number;
   }[];
@@ -441,6 +544,8 @@ export const api = {
       }),
     slots: (doctorId: string, date: string) =>
       req<SlotsResponse>(`/appointments/slots?doctor_id=${doctorId}&date=${date}`),
+    onlineSlots: (doctorId: string, date: string) =>
+      req<OnlineSlotsResponse>(`/appointments/online-slots?doctor_id=${doctorId}&date=${date}`),
     nextToken: (doctorId: string, date: string) =>
       req<{ token: number }>(`/appointments/next-token?doctor_id=${doctorId}&date=${date}`),
     book: (data: BookAppointmentPayload) =>
@@ -593,6 +698,24 @@ export const api = {
       ),
     getTransactions: (medicineId: string) =>
       req<StockTransaction[]>(`/medicines/${medicineId}/transactions`),
+    editBatch: (batchId: string, data: {
+      batch_number?: string;
+      expiry_date?: string;
+      strips_received?: number;
+      purchase_price_per_strip?: number;
+      supplier_name?: string;
+      invoice_number?: string;
+      date_received?: string;
+    }) =>
+      req<{ success: boolean; batch: MedicineStockBatch; strips_editable: boolean }>(
+        `/medicine-stock/${batchId}`,
+        { method: "PATCH", body: JSON.stringify(data) }
+      ),
+    adjustBatch: (batchId: string, data: { adjusted_quantity: number; reason: string; notes?: string }) =>
+      req<{ success: boolean; previous_quantity: number; adjusted_quantity: number; difference: number }>(
+        `/medicine-stock/${batchId}/adjust`,
+        { method: "POST", body: JSON.stringify(data) }
+      ),
   },
 
   pharmacy: {
@@ -674,6 +797,79 @@ export const api = {
       req<DaySchedule>("/schedule", { method: "POST", body: JSON.stringify(payload) }),
     deleteDay: (doctorId: string, dayOfWeek: string) =>
       req<{ deleted: boolean; day_of_week: string }>(`/schedule/${dayOfWeek}?doctor_id=${doctorId}`, { method: "DELETE" }),
+  },
+
+  dispense: {
+    list: (doctorId: string, status = "pending,partial", params: { dateFrom?: string; dateTo?: string; limit?: number; offset?: number } = {}) => {
+      const p = new URLSearchParams({ doctor_id: doctorId, status });
+      if (params.dateFrom) p.set("date_from", params.dateFrom);
+      if (params.dateTo)   p.set("date_to",   params.dateTo);
+      if (params.limit  != null) p.set("limit",  String(params.limit));
+      if (params.offset != null) p.set("offset", String(params.offset));
+      return req<{ orders: DispenseOrder[]; total: number; has_more: boolean }>(`/dispense-orders?${p}`);
+    },
+    get: (orderId: string) =>
+      req<DispenseOrder>(`/dispense-orders/${orderId}`),
+    process: (orderId: string, items: DispenseAction[]) =>
+      req<{ ok: boolean; order_status: string }>(`/dispense-orders/${orderId}/dispense`, {
+        method: "POST",
+        body: JSON.stringify({ items }),
+      }),
+    returnItem: (orderId: string, itemId: string, qty: number, reason?: string) =>
+      req<{ ok: boolean; order_status: string; new_stock: number }>(`/dispense-orders/${orderId}/return`, {
+        method: "POST",
+        body: JSON.stringify({ item_id: itemId, qty, reason }),
+      }),
+    reopenItem: (orderId: string, itemId: string) =>
+      req<{ ok: boolean; remaining: number }>(`/dispense-orders/${orderId}/reopen-item`, {
+        method: "POST",
+        body: JSON.stringify({ item_id: itemId }),
+      }),
+  },
+
+  consultations: {
+    today: (doctorId: string) =>
+      req<{ consultations: Consultation[] }>(`/consultations/today?doctor_id=${doctorId}`),
+    list: (doctorId: string, params: { status?: string; date?: string; date_from?: string; date_to?: string } = {}) => {
+      const p = new URLSearchParams({ doctor_id: doctorId });
+      if (params.status)    p.set("status",    params.status);
+      if (params.date)      p.set("date",      params.date);
+      if (params.date_from) p.set("date_from", params.date_from);
+      if (params.date_to)   p.set("date_to",   params.date_to);
+      return req<{ consultations: Consultation[] }>(`/consultations?${p}`);
+    },
+    create: (body: {
+      patient_id: string;
+      doctor_id?: string;
+      appointment_id?: string;
+      scheduled_at: string;
+      chief_complaint?: string;
+    }) =>
+      req<{ success: boolean; consultation: Consultation; room_id: string; patient_join_url: string }>(
+        "/consultations", { method: "POST", body: JSON.stringify(body) }
+      ),
+    sendLink: (id: string) =>
+      req<{ success: boolean }>(`/consultations/${id}/send-link`, { method: "POST" }),
+    doctorToken: (id: string) =>
+      req<DoctorToken>(`/consultations/${id}/doctor-token`),
+    complete: (id: string, doctorNotes = "") =>
+      req<{ success: boolean; duration_minutes: number | null }>(
+        `/consultations/${id}/complete`,
+        { method: "PATCH", body: JSON.stringify({ doctor_notes: doctorNotes }) }
+      ),
+    cancel: (id: string) =>
+      req<{ success: boolean }>(`/consultations/${id}/cancel`, { method: "PATCH" }),
+    noShow: (id: string) =>
+      req<{ success: boolean }>(`/consultations/${id}/no-show`, { method: "PATCH" }),
+  },
+
+  doctors: {
+    getOnlineSettings: (doctorId: string) =>
+      req<DoctorOnlineSettings>(`/doctors/${doctorId}/online-settings`),
+    updateOnlineSettings: (doctorId: string, body: Partial<DoctorOnlineSettings>) =>
+      req<DoctorOnlineSettings>(`/doctors/${doctorId}/online-settings`, {
+        method: "PATCH", body: JSON.stringify(body),
+      }),
   },
 
   clinicSchedule: {

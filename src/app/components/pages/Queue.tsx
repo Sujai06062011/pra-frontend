@@ -352,9 +352,9 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
       )}
 
       {/* Hero queue display */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="flex flex-col md:grid md:grid-cols-3 gap-4">
         {/* Now Serving card */}
-        <div className="col-span-1 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-200 flex flex-col items-center justify-center gap-1">
+        <div className="md:col-span-1 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-200 flex flex-col items-center justify-center gap-1">
           {loading ? (
             <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 56, lineHeight: 1 }}>…</div>
           ) : currentPatient ? (
@@ -414,19 +414,19 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
         </div>
 
         {/* Stats */}
-        <div className="col-span-2 grid grid-cols-2 gap-4">
+        <div className="md:col-span-2 grid grid-cols-2 gap-3">
           {[
-            { icon: <Users size={22} className="text-blue-600" />, label: "Waiting", value: loading ? "—" : waitingCount, sub: "patients in queue", bg: "bg-blue-50", border: "border-blue-100" },
-            { icon: <Clock size={22} className="text-amber-600" />, label: "Avg Wait Time", value: "—", sub: "current estimate", bg: "bg-amber-50", border: "border-amber-100" },
-            { icon: <CheckCircle2 size={22} className="text-emerald-600" />, label: "Completed", value: loading ? "—" : data.completed, sub: "today so far", bg: "bg-emerald-50", border: "border-emerald-100" },
-            { icon: <Activity size={22} className="text-violet-600" />, label: "Total Tokens", value: loading ? "—" : data.total_today, sub: "issued today", bg: "bg-violet-50", border: "border-violet-100" },
+            { icon: <Users size={18} className="text-blue-600" />, label: "Waiting", value: loading ? "—" : waitingCount, sub: "in queue", bg: "bg-blue-50", border: "border-blue-100" },
+            { icon: <Clock size={18} className="text-amber-600" />, label: "Avg Wait Time", value: "—", sub: "estimate", bg: "bg-amber-50", border: "border-amber-100" },
+            { icon: <CheckCircle2 size={18} className="text-emerald-600" />, label: "Completed", value: loading ? "—" : data.completed, sub: "today", bg: "bg-emerald-50", border: "border-emerald-100" },
+            { icon: <Activity size={18} className="text-violet-600" />, label: "Total Tokens", value: loading ? "—" : data.total_today, sub: "issued", bg: "bg-violet-50", border: "border-violet-100" },
           ].map((s) => (
-            <div key={s.label} className={`${s.bg} border ${s.border} rounded-2xl p-5 flex items-center gap-4`}>
-              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm">{s.icon}</div>
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{s.label}</div>
-                <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 28, lineHeight: 1.2 }} className="text-slate-800">{s.value}</div>
-                <div className="text-[11px] text-slate-400 mt-0.5">{s.sub}</div>
+            <div key={s.label} className={`${s.bg} border ${s.border} rounded-2xl p-3 md:p-5 overflow-hidden min-w-0 flex flex-col gap-1`}>
+              <div className="w-9 h-9 md:w-10 md:h-10 bg-white rounded-xl flex items-center justify-center shadow-sm flex-shrink-0">{s.icon}</div>
+              <div className="min-w-0">
+                <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-500 truncate">{s.label}</div>
+                <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, lineHeight: 1.2 }} className="text-2xl text-slate-800">{s.value}</div>
+                <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">{s.sub}</div>
               </div>
             </div>
           ))}
@@ -461,49 +461,53 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
                 <div
                   key={p.id}
                   style={{ transition: "background-color 0.4s ease-in-out" }}
-                  className={`flex items-center gap-4 px-5 py-3.5 transition-colors ${
+                  className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-5 py-3.5 transition-colors ${
                     isFlashing  ? "bg-amber-100" :
                     isCancelled ? "opacity-40 bg-white" :
                     isNoShow    ? "bg-amber-50/60" :
                     isCurrent   ? "bg-emerald-50" : "hover:bg-slate-50"
                   }`}
                 >
-                  {/* Token number */}
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[14px] font-bold flex-shrink-0 ${
-                    isCancelled ? "bg-slate-200 text-slate-400" :
-                    isNoShow    ? "bg-amber-100 text-amber-500" :
-                    isCurrent   ? "bg-emerald-500 text-white shadow-sm shadow-emerald-200" :
-                    isDone      ? "bg-slate-100 text-slate-400" :
-                                  "bg-slate-100 text-slate-600"
-                  }`}>
-                    {p.display_token || p.token_number || "—"}
-                  </div>
-
-                  {/* Avatar */}
-                  <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center text-white text-[13px] font-bold shadow-sm flex-shrink-0 ${(isCancelled || isNoShow) ? "opacity-50" : ""}`}>
-                    {name[0]}
-                  </div>
-
-                  {/* Name */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[13px] font-medium text-slate-800 ${isCancelled ? "line-through" : ""}`}>
-                        {name}
-                      </span>
-                      {isCurrent && (
-                        <span className="text-[10px] font-bold bg-emerald-500 text-white px-2 py-0.5 rounded-full">CURRENT</span>
-                      )}
+                  {/* Line 1 on mobile: token + avatar + name/age */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Token number */}
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[14px] font-bold flex-shrink-0 ${
+                      isCancelled ? "bg-slate-200 text-slate-400" :
+                      isNoShow    ? "bg-amber-100 text-amber-500" :
+                      isCurrent   ? "bg-emerald-500 text-white shadow-sm shadow-emerald-200" :
+                      isDone      ? "bg-slate-100 text-slate-400" :
+                                    "bg-slate-100 text-slate-600"
+                    }`}>
+                      {p.display_token || p.token_number || "—"}
                     </div>
-                    {p.patients?.age && <div className="text-[11px] text-slate-400">{p.patients.age} yrs</div>}
+
+                    {/* Avatar */}
+                    <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center text-white text-[13px] font-bold shadow-sm flex-shrink-0 ${(isCancelled || isNoShow) ? "opacity-50" : ""}`}>
+                      {name[0]}
+                    </div>
+
+                    {/* Name */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-[13px] font-medium text-slate-800 ${isCancelled ? "line-through" : ""}`}>
+                          {name}
+                        </span>
+                        {isCurrent && (
+                          <span className="text-[10px] font-bold bg-emerald-500 text-white px-2 py-0.5 rounded-full">CURRENT</span>
+                        )}
+                      </div>
+                      {p.patients?.age && <div className="text-[11px] text-slate-400">{p.patients.age} yrs</div>}
+                    </div>
                   </div>
 
-                  {/* Slot time */}
-                  <div className="text-[12px] font-medium text-slate-500 w-20 text-right">
-                    {fmtTime(p.appointment_time)}
-                  </div>
+                  {/* Line 2 on mobile: time + badges */}
+                  <div className="flex items-center gap-2 flex-wrap sm:ml-auto">
+                    {/* Slot time */}
+                    <div className="text-[12px] font-medium text-slate-500 sm:w-20 sm:text-right">
+                      {fmtTime(p.appointment_time)}
+                    </div>
 
-                  {/* Badge / actions */}
-                  <div className="flex items-center gap-2">
+                    {/* Badge / actions */}
                     {isCancelled && (
                       <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-rose-50 text-rose-600 border border-rose-200">
                         Cancelled

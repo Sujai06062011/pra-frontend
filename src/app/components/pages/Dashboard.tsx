@@ -248,8 +248,8 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
         ))}
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* Stat cards — row 1 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
         {/* Appointments */}
         <div onClick={() => onNavigate?.("appointments")} className="cursor-pointer">
@@ -319,6 +319,31 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
           />
         </div>
 
+        {/* Pharmacy Alerts */}
+        <div onClick={() => onNavigate?.("medicines-alerts")} className="cursor-pointer">
+          <StatCard
+            icon={<Pill size={20} className="text-rose-600" />}
+            title="Pharmacy Alerts"
+            value={pharmacyAlerts === null ? "—" : pharmacyAlerts.summary.total_alerts}
+            unit={pharmacyAlerts?.summary.total_alerts === 0 ? "all clear" : "alerts"}
+            accent="bg-gradient-to-r from-rose-400 to-pink-400"
+            accentBg="bg-rose-50"
+            details={pharmacyAlerts === null ? [
+              { dot: "bg-slate-300", label: "Loading…" },
+            ] : pharmacyAlerts.summary.total_alerts === 0 ? [
+              { dot: "bg-emerald-500", label: "No issues found" },
+            ] : [
+              ...(pharmacyAlerts.summary.expired_count > 0 ? [{ dot: "bg-red-500", label: `${pharmacyAlerts.summary.expired_count} expired` }] : []),
+              ...(pharmacyAlerts.summary.low_stock_count > 0 ? [{ dot: "bg-orange-400", label: `${pharmacyAlerts.summary.low_stock_count} low stock` }] : []),
+              ...(pharmacyAlerts.summary.expiring_soon_count > 0 ? [{ dot: "bg-amber-400", label: `${pharmacyAlerts.summary.expiring_soon_count} expiring soon` }] : []),
+            ]}
+          />
+        </div>
+      </div>
+
+      {/* Stat cards — row 2 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
         {/* Follow-ups */}
         <div onClick={() => onNavigate?.("followups")} className="cursor-pointer">
           <StatCard
@@ -363,107 +388,12 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
         </div>
       </div>
 
-      {/* Pharmacy Alerts */}
-      {pharmacyAlerts && pharmacyAlerts.summary.total_alerts > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          {/* Header — matches other section cards */}
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center flex-shrink-0">
-                <Pill size={20} className="text-rose-500" />
-              </div>
-              <div>
-                <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15 }} className="text-slate-800 flex items-center gap-2">
-                  Pharmacy Alerts
-                  <span className="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
-                    {pharmacyAlerts.summary.total_alerts}
-                  </span>
-                </h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  {[
-                    pharmacyAlerts.summary.expired_count > 0 && `${pharmacyAlerts.summary.expired_count} expired`,
-                    pharmacyAlerts.summary.low_stock_count > 0 && `${pharmacyAlerts.summary.low_stock_count} low stock`,
-                    pharmacyAlerts.summary.expiring_soon_count > 0 && `${pharmacyAlerts.summary.expiring_soon_count} expiring soon`,
-                  ].filter(Boolean).join(" · ")}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => onNavigate?.("medicines")}
-              className="flex items-center gap-1 text-[12px] font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
-            >
-              View Medicines <ArrowRight size={13} />
-            </button>
-          </div>
-
-          {/* Alert rows in a single flat list — same density as appointments table */}
-          <div className="divide-y divide-slate-50">
-            {pharmacyAlerts.expired.map(item => (
-              <div key={item.batch_id} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50/60 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
-                  <div>
-                    <span className="text-[13px] font-medium text-slate-800">{item.name}</span>
-                    <span className="text-[11px] text-slate-400 ml-2">Batch {item.batch_number}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-[11px] text-slate-400">
-                    Expired {new Date(item.expiry_date + "T00:00:00").toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
-                  </span>
-                  <span className="text-[11px] font-semibold bg-red-50 text-red-600 px-2 py-0.5 rounded-full">
-                    {item.tablets_remaining} units · Expired
-                  </span>
-                </div>
-              </div>
-            ))}
-
-            {pharmacyAlerts.low_stock.map(item => (
-              <div key={item.id} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50/60 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0" />
-                  <span className="text-[13px] font-medium text-slate-800">{item.name}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-[11px] text-slate-400">threshold: {item.low_stock_threshold} {item.dispense_unit}s</span>
-                  <span className="text-[11px] font-semibold bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full">
-                    {item.total_stock} left · Low Stock
-                  </span>
-                </div>
-              </div>
-            ))}
-
-            {pharmacyAlerts.expiring_soon.slice(0, 5).map(item => (
-              <div key={item.batch_id} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50/60 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
-                  <div>
-                    <span className="text-[13px] font-medium text-slate-800">{item.name}</span>
-                    {item.batch_number && <span className="text-[11px] text-slate-400 ml-2">Batch {item.batch_number}</span>}
-                  </div>
-                </div>
-                <span className="text-[11px] font-semibold bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full">
-                  Expires {new Date(item.expiry_date + "T00:00:00").toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
-                </span>
-              </div>
-            ))}
-
-            {pharmacyAlerts.expiring_soon.length > 5 && (
-              <div className="px-5 py-2.5">
-                <button onClick={() => onNavigate?.("medicines")} className="text-[12px] text-slate-400 hover:text-slate-600">
-                  +{pharmacyAlerts.expiring_soon.length - 5} more expiring soon →
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Bottom grid */}
-      <div className="grid grid-cols-5 gap-4">
+      <div className="flex flex-col lg:flex-row gap-4">
 
         {/* Appointments Table */}
-        <div className="col-span-3 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="w-full lg:flex-1 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <div>
               <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15 }} className="text-slate-800">
@@ -481,7 +411,8 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
           {tabLoading ? (
             <div className="px-5 py-8 text-center text-[13px] text-slate-400">Loading appointments…</div>
           ) : (
-          <table className="w-full">
+          <div className="overflow-x-auto">
+          <table className="min-w-[500px] w-full">
             <thead>
               <tr className="bg-slate-50/60">
                 {["Token", "Patient", "Date", "Time", "Status"].map((h) => (
@@ -495,11 +426,12 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
               <DashboardApptRows appts={tabAppts} currentToken={stats.current_token ?? 0} />
             </tbody>
           </table>
+          </div>
           )}
         </div>
 
         {/* Right panels */}
-        <div className="col-span-2 space-y-4">
+        <div className="w-full lg:w-80 xl:w-96 space-y-4">
 
           {/* Needs Attention */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
