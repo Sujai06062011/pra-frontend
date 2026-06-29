@@ -2,9 +2,10 @@ import { useState } from "react";
 import {
   LayoutDashboard, CalendarDays, Users, Hash, Pill, FlaskConical,
   MessageCircle, Phone, Star, BarChart3, Settings, ChevronRight,
-  Stethoscope, LogOut, Tablets, UserPlus, CalendarPlus, CalendarClock,
+  Stethoscope, Tablets, UserPlus, CalendarPlus, CalendarClock,
   ShoppingBag, Video, Menu, X,
 } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 
 export type Page =
   | "dashboard" | "appointments" | "availability" | "queue" | "patients"
@@ -77,6 +78,7 @@ export function Sidebar({
   appointmentsBadge?: number;
   consultationsBadge?: number;
 }) {
+  const { user } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const dynamicBadges: Partial<Record<Page, number>> = {
@@ -126,16 +128,16 @@ export function Sidebar({
           </div>
           <div>
             <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 17, letterSpacing: -0.5 }} className="text-slate-800">
-              PRA
+              PARRO
             </div>
-            <div className="text-[10px] text-slate-400 mt-0.5 leading-none">Patient Relationship Assistant</div>
+            <div className="text-[10px] text-slate-400 mt-0.5 leading-none">Engage. Retain. Grow</div>
           </div>
         </div>
 
         {/* Clinic badge */}
         <div className="mt-4 px-3 py-2.5 bg-emerald-50 border border-emerald-100 rounded-xl">
-          <div className="text-xs font-semibold text-emerald-700">Dr. Kumar Child Care</div>
-          <div className="text-[11px] text-slate-500 mt-0.5">Dr. Rajkumar · Paediatrics</div>
+          <div className="text-xs font-semibold text-emerald-700">TrueCare Family Clinic</div>
+          {user && <div className="text-[11px] text-slate-500 mt-0.5">{user.name} · {user.role}</div>}
         </div>
       </div>
 
@@ -180,7 +182,7 @@ export function Sidebar({
                     <span className={isActive ? "text-white" : "text-slate-400 group-hover:text-slate-600"}>
                       {item.icon}
                     </span>
-                    <span className="flex-1 text-left">{item.label}</span>
+                    <span className="flex-1 text-left">{item.page === "settings" && user?.role === "doctor" ? "Doctor Settings" : item.label}</span>
                     {(() => {
                       const count = dynamicBadges[item.page] ?? item.badge;
                       return count ? (
@@ -198,21 +200,6 @@ export function Sidebar({
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="px-4 py-4 border-t border-slate-100">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-400 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
-            RK
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-slate-700 truncate">Dr. Rajkumar</div>
-            <div className="text-[10px] text-slate-400">Admin · Reception</div>
-          </div>
-          <button className="text-slate-300 hover:text-slate-500 transition-colors">
-            <LogOut size={14} />
-          </button>
-        </div>
-      </div>
     </aside>
     </>
   );

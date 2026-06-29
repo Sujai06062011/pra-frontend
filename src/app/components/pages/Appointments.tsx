@@ -1,7 +1,9 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { Search, CheckCircle2, Clock, XCircle, Activity, RefreshCw, AlertTriangle, Loader2, UserX, ShieldOff } from "lucide-react";
+import { Search, CheckCircle2, Clock, XCircle, Activity, RefreshCw, AlertTriangle, Loader2, UserX, ShieldOff, ChevronDown } from "lucide-react";
 import { useTodayAppointments, useAppointments, useQueue } from "../../../hooks/usePRAData";
 import { useAuth } from "../../../context/AuthContext";
+import { useClinicContext } from "../../../hooks/useClinicContext";
+import { DoctorSwitcher } from "../DoctorSwitcher";
 import { api, type Appointment } from "../../../lib/api";
 
 // ── helpers ──────────────────────────────────────────────
@@ -181,6 +183,8 @@ function CancelModal({ appointments, onConfirm, onBack, isCancelling }: ModalPro
 // ── main ─────────────────────────────────────────────────
 export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointment?: () => void; onPrescribe?: (patientId: string, appointmentId: string) => void }) {
   const { doctorId } = useAuth();
+  const { context: clinicCtx } = useClinicContext(doctorId);
+  const [selectedDoctorId, setSelectedDoctorId] = useState(doctorId);
   const [search, setSearch]       = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("waiting");
   const [dateTab, setDateTab]     = useState<DateTab>("today");
@@ -192,6 +196,7 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showModal, setShowModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [blockPrompt, setBlockPrompt] = useState<{
     date: string;
@@ -204,10 +209,10 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
   const weekRange = useMemo(() => getThisWeekRange(), []);
   const tomorrowDate = useMemo(() => getTomorrowDate(), []);
 
-  const todayHook    = useTodayAppointments();
-  const tomorrowHook = useAppointments(tomorrowDate);
-  const weekHook     = useAppointments(undefined, weekRange.dateFrom, weekRange.dateTo);
-  const allHook      = useAppointments();
+  const todayHook    = useTodayAppointments(selectedDoctorId);
+  const tomorrowHook = useAppointments(tomorrowDate, undefined, undefined, selectedDoctorId);
+  const weekHook     = useAppointments(undefined, weekRange.dateFrom, weekRange.dateTo, selectedDoctorId);
+  const allHook      = useAppointments(undefined, undefined, undefined, selectedDoctorId);
 
   const activeHook =
     dateTab === "today"    ? todayHook    :
@@ -293,6 +298,16 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
 
   const selectAll = () => setSelectedIds(new Set(selectableFiltered.map(a => a.id)));
 
+  const handleStatusChange = useCallback(async (id: string, status: Appointment["status"]) => {
+    try {
+      await api.appointments.updateStatus(id, status);
+      refetch();
+      setOpenActionMenu(null);
+    } catch {
+      // silent — refetch will show current state
+    }
+  }, [refetch]);
+
   const selectedAppointments = filtered.filter(a => selectedIds.has(a.id));
 
   // Clear selection on tab change
@@ -366,7 +381,7 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
     if (!blockPrompt) return;
     setBlocking(true);
     try {
-      await api.availability.blockFromCancel("8c33abe0-5d2e-4613-9437-c7c375e8d162", blockPrompt.date, blockType);
+      await api.availability.blockFromCancel(selectedDoctorId, blockPrompt.date, blockType);
       const label = blockType === "morning" ? "Morning" : blockType === "evening" ? "Evening" : "Full day";
       setToast({ msg: `${label} slots blocked. New bookings for this period are disabled.`, type: "success" });
       setBlockPrompt(null);
@@ -463,6 +478,13 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
             />
           </div>
         </div>
+        {clinicCtx.multi_doctor_enabled && (
+          <DoctorSwitcher
+            clinicWhatsapp={clinicCtx.whatsapp_number}
+            selectedDoctorId={selectedDoctorId}
+            onSelect={(id) => setSelectedDoctorId(id)}
+          />
+        )}
       </div>
 
       {/* Date tabs + Status filter row */}
@@ -505,35 +527,15 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
         </div>
       </div>
 
-      {/* Bulk action bar — shown when there are selectable waiting appointments */}
+      {/* Bulk action bar */}
       {selectableFiltered.length > 0 && (
-        <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2.5">
-          <span className="text-[12px] font-semibold text-slate-500 mr-1">Bulk cancel:</span>
-          <button
-            onClick={selectAll}
-            className="px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-rose-200 text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors"
-          >
-            Cancel All
-          </button>
-          <button
-            onClick={() => selectGroup("morning")}
-            className="px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors"
-          >
-            Cancel Morning
-          </button>
-          <button
-            onClick={() => selectGroup("evening")}
-            className="px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors"
-          >
-            Cancel Evening
-          </button>
+        <div className="flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-xl px-4 py-2.5">
+          <span className="text-[12px] font-semibold text-slate-500 mr-1">Bulk action:</span>
+          <button onClick={selectAll} className="px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-rose-200 text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors">Cancel All</button>
+          <button onClick={() => selectGroup("morning")} className="px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors">Cancel Morning</button>
+          <button onClick={() => selectGroup("evening")} className="px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors">Cancel Evening</button>
           {selectedIds.size > 0 && (
-            <button
-              onClick={() => setSelectedIds(new Set())}
-              className="ml-auto text-[11px] text-slate-400 hover:text-slate-600 transition-colors"
-            >
-              Clear selection
-            </button>
+            <button onClick={() => setSelectedIds(new Set())} className="ml-auto text-[11px] text-slate-400 hover:text-slate-600 transition-colors">Clear selection</button>
           )}
         </div>
       )}
@@ -644,9 +646,31 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
                       </span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${s.cls}`}>
-                        {s.icon} {s.label}
-                      </span>
+                      <div className="relative flex items-center gap-2">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${s.cls}`}>
+                          {s.icon} {s.label}
+                        </span>
+                        {(apt.derivedStatus === "waiting" || apt.derivedStatus === "in-progress") && (
+                          <div className="relative">
+                            <button
+                              onClick={e => { e.stopPropagation(); setOpenActionMenu(openActionMenu === apt.id ? null : apt.id); }}
+                              className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                            >
+                              <ChevronDown size={13} />
+                            </button>
+                            {openActionMenu === apt.id && (
+                              <div className="absolute right-0 top-7 z-50 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[140px]">
+                                <button onClick={() => handleStatusChange(apt.id, "Completed")} className="w-full text-left px-3 py-2 text-[12px] text-emerald-700 hover:bg-emerald-50 flex items-center gap-2">
+                                  <CheckCircle2 size={12} /> Mark as Seen
+                                </button>
+                                <button onClick={() => handleStatusChange(apt.id, "No-Show")} className="w-full text-left px-3 py-2 text-[12px] text-orange-600 hover:bg-orange-50 flex items-center gap-2">
+                                  <UserX size={12} /> Mark as No Show
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

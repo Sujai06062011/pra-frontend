@@ -1,6 +1,9 @@
 import { useState, useCallback } from "react";
 import { ChevronRight, ChevronLeft, Clock, Users, CheckCircle2, Activity, RefreshCw, AlertTriangle, UserX } from "lucide-react";
 import { useQueue } from "../../../hooks/usePRAData";
+import { useAuth } from "../../../context/AuthContext";
+import { useClinicContext } from "../../../hooks/useClinicContext";
+import { DoctorSwitcher } from "../DoctorSwitcher";
 import { api } from "../../../lib/api";
 import type { Appointment } from "../../../lib/api";
 import {
@@ -164,7 +167,10 @@ function NoShowModal({
 
 // ── component ─────────────────────────────────────────────
 export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appointmentId: string) => void } = {}) {
-  const { data, loading, error, refetch, setToken } = useQueue();
+  const { doctorId: authDoctorId } = useAuth();
+  const { context: clinicCtx } = useClinicContext(authDoctorId);
+  const [selectedDoctorId, setSelectedDoctorId] = useState(authDoctorId);
+  const { data, loading, error, refetch, setToken } = useQueue(selectedDoctorId);
   const appointments = data.appointments;
 
   // Session transition popup
@@ -435,10 +441,17 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
 
       {/* Queue list */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
           <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15 }} className="text-slate-800">
             Today's Queue
           </h3>
+          {clinicCtx.multi_doctor_enabled && (
+            <DoctorSwitcher
+              clinicWhatsapp={clinicCtx.whatsapp_number}
+              selectedDoctorId={selectedDoctorId}
+              onSelect={(id) => setSelectedDoctorId(id)}
+            />
+          )}
         </div>
         {loading ? (
           <div className="px-5 py-8 text-center text-[13px] text-slate-400">Loading queue…</div>

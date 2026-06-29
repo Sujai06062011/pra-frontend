@@ -1,8 +1,8 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useEffect } from "react";
 import type { Page } from "../Sidebar";
 import {
   CalendarDays, Hash, Pill, Phone, FlaskConical, MessageCircle,
-  TrendingUp, TrendingDown, ChevronRight, AlertTriangle, X,
+  TrendingUp, AlertTriangle,
   CheckCircle2, Clock, XCircle, ArrowRight, Activity, RefreshCw
 } from "lucide-react";
 import { api, type PharmacyAlerts } from "../../../lib/api";
@@ -10,7 +10,7 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from "recharts";
-import { useDashboardStats, useAppointments, useTodayAppointments, useQueries, useFollowUps } from "../../../hooks/usePRAData";
+import { useDashboardStats, useAppointments, useTodayAppointments, useQueries } from "../../../hooks/usePRAData";
 import { useAuth } from "../../../context/AuthContext";
 
 const visitTypes = [
@@ -165,7 +165,6 @@ function DashboardApptRows({ appts, currentToken }: { appts: ReturnType<typeof u
 
 export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void }) {
   const { doctorId } = useAuth();
-  const [alertVisible, setAlertVisible] = useState(true);
   const [activeTab, setActiveTab] = useState<"today" | "week" | "month">("today");
 
   const { data: stats, loading: statsLoading, error: statsError, refetch: refetchStats } = useDashboardStats();
@@ -181,7 +180,6 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
   const tabLoading = activeTab === "today" ? apptsLoading : activeTab === "week" ? weekLoading : monthAppts2;
 
   const { data: queries } = useQueries();
-  const { data: followUps } = useFollowUps();
 
   const [pharmacyAlerts, setPharmacyAlerts] = useState<PharmacyAlerts | null>(null);
   useEffect(() => {
@@ -190,8 +188,6 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
   }, [doctorId]);
 
   const pendingQueries = queries.filter(q => q.status === "Pending");
-  const pendingFollowUps = followUps.filter(f => !f.completed_at);
-  const attentionTotal = pendingQueries.length + pendingFollowUps.length;
 
   const weekData = stats.weekly_appointments.map((d) => ({
     day: new Date(d.date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short" }),
@@ -205,7 +201,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
   const activeCount = tabAppts.filter(a => a.status === "In Progress" || a.status === "Confirmed").length;
 
   return (
-    <div className="p-7 space-y-6">
+    <div className="p-4 sm:p-7 space-y-6">
 
       {/* Error banner */}
       {(statsError || apptsError) && (
@@ -218,23 +214,8 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
         </div>
       )}
 
-      {/* Alert bar */}
-      {alertVisible && stats.pending_followups > 0 && (
-        <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-          <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
-            <AlertTriangle size={16} className="text-amber-600" />
-          </div>
-          <p className="flex-1 text-[13px] text-slate-700">
-            <span className="font-semibold text-amber-700">{stats.pending_followups} follow-ups</span> pending
-          </p>
-          <button onClick={() => setAlertVisible(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
-            <X size={16} />
-          </button>
-        </div>
-      )}
-
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit overflow-x-auto max-w-full">
         {(["today", "week", "month"] as const).map((t) => (
           <button
             key={t}
@@ -314,7 +295,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
             accent="bg-gradient-to-r from-violet-400 to-purple-400"
             accentBg="bg-violet-50"
             details={[
-              { dot: "bg-violet-500", label: `${statsLoading ? "—" : stats.pending_followups} follow-ups pending` },
+              { dot: "bg-violet-500", label: "All registered patients" },
             ]}
           />
         </div>
@@ -350,11 +331,11 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
             icon={<Phone size={20} className="text-violet-600" />}
             title="Post-Visit Follow-ups"
             value={statsLoading ? "—" : stats.pending_followups}
-            unit="pending"
+            unit="sent this week"
             accent="bg-gradient-to-r from-violet-400 to-purple-400"
             accentBg="bg-violet-50"
             details={[
-              { dot: "bg-rose-500", label: "Pending action" },
+              { dot: "bg-violet-500", label: "View on Follow-ups tab" },
             ]}
           />
         </div>
@@ -432,51 +413,6 @@ export function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void })
 
         {/* Right panels */}
         <div className="w-full lg:w-80 xl:w-96 space-y-4">
-
-          {/* Needs Attention */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="px-4 py-3.5 border-b border-slate-100 flex items-center justify-between">
-              <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 14 }} className="text-slate-800 flex items-center gap-2">
-                <span className="w-5 h-5 bg-rose-100 rounded-md flex items-center justify-center">
-                  <AlertTriangle size={11} className="text-rose-600" />
-                </span>
-                Needs Attention
-              </h3>
-              {attentionTotal > 0 && (
-                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-600">{attentionTotal}</span>
-              )}
-            </div>
-            {attentionTotal === 0 ? (
-              <div className="px-4 py-6 text-center text-[12px] text-slate-400">All clear — nothing needs attention</div>
-            ) : (
-              <>
-                {pendingFollowUps.slice(0, 3).map((f, i) => (
-                  <div key={f.id ?? i} className="flex items-center gap-3 px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors cursor-pointer">
-                    <div className="w-2 h-2 rounded-full flex-shrink-0 bg-rose-500" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[13px] font-medium text-slate-800">{f.patients?.name ?? "Patient"}</div>
-                      <div className="text-[11px] text-slate-400 truncate">Follow-up pending</div>
-                    </div>
-                    <button className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors">
-                      📞 Call
-                    </button>
-                  </div>
-                ))}
-                {pendingQueries.slice(0, 3).map((q, i) => (
-                  <div key={q.id ?? i} className="flex items-center gap-3 px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors cursor-pointer">
-                    <div className="w-2 h-2 rounded-full flex-shrink-0 bg-amber-500" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[13px] font-medium text-slate-800">{q.patients?.name ?? "Patient"}</div>
-                      <div className="text-[11px] text-slate-400 truncate">Query awaiting reply</div>
-                    </div>
-                    <button className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors">
-                      💬 Reply
-                    </button>
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
 
           {/* Week bar chart */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">

@@ -5,8 +5,8 @@ import {
 } from "lucide-react";
 import { api } from "../../../lib/api";
 import type { AvailabilityInfo, ClinicScheduleResponse, ClinicScheduleDay } from "../../../lib/api";
+import { useAuth } from "../../../context/AuthContext";
 
-const DOCTOR_ID = "8c33abe0-5d2e-4613-9437-c7c375e8d162";
 const API_BASE = import.meta.env.VITE_API_URL || "https://web-production-e5f38.up.railway.app";
 
 // ── helpers ────────────────────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ interface ClinicCfg {
   duration: number;
 }
 
-async function fetchClinicCfg(): Promise<ClinicCfg> {
+async function fetchClinicCfg(DOCTOR_ID: string): Promise<ClinicCfg> {
   const keys = [
     "clinic.slot_start_morning", "clinic.slot_end_morning",
     "clinic.slot_start_evening", "clinic.slot_end_evening",
@@ -168,6 +168,7 @@ function statusText(av: AvailabilityInfo, di: ClinicScheduleDay): string {
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
 
 export function Availability() {
+  const { doctorId: DOCTOR_ID, clinicName, doctorName } = useAuth();
   const today = todayISO();
   const [cfg, setCfg] = useState<ClinicCfg | null>(null);
   const [clinicSchedule, setClinicSchedule] = useState<ClinicScheduleResponse | null>(null);
@@ -196,12 +197,8 @@ export function Availability() {
 
   // Load clinic config + weekly schedule once
   useEffect(() => {
-    fetchClinicCfg().then(c => {
+    fetchClinicCfg(DOCTOR_ID).then(c => {
       setCfg(c);
-      setMorningStart(c.morning_start);
-      setMorningEnd(c.morning_end);
-      setEveningStart(c.evening_start);
-      setEveningEnd(c.evening_end);
     }).catch(() => {});
 
     api.clinicSchedule.get(DOCTOR_ID).then(d => setClinicSchedule(d)).catch(() => {});
@@ -335,8 +332,8 @@ export function Availability() {
   const di = dayInfo(selectedDate, clinicSchedule, cfg);
   const dayLabel = getDayDisplay(selectedDate);
   const isNormallyClosed = !di.enabled;
-  const morningOpts = genTimeOptions(di.morning.start, di.morning.end, cfg.duration);
-  const eveningOpts = genTimeOptions(di.evening.start, di.evening.end, cfg.duration);
+  const morningOpts = genTimeOptions(di.morning.start, di.morning.end, di.slot_duration_minutes);
+  const eveningOpts = genTimeOptions(di.evening.start, di.evening.end, di.slot_duration_minutes);
 
   return (
     <div className="p-7 space-y-6 max-w-3xl">
@@ -346,7 +343,7 @@ export function Availability() {
         <h1 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 22 }} className="text-slate-800">
           Availability Management
         </h1>
-        <p className="text-[13px] text-slate-500 mt-1">Dr. Kumar Child Care · Dr. Rajkumar</p>
+        <p className="text-[13px] text-slate-500 mt-1">{clinicName} · {doctorName}</p>
       </div>
 
       {/* ── Calendar strip ─────────────────────────────────────────────────── */}

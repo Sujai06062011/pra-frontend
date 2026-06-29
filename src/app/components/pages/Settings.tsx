@@ -6,8 +6,8 @@ import {
 } from "lucide-react";
 import type { ClinicScheduleResponse, ClinicScheduleDay, ClinicScheduleSession, DoctorOnlineSettings, OnlineDayEntry, OnlineDaySession } from "../../../lib/api";
 import { api } from "../../../lib/api";
+import { useAuth } from "../../../context/AuthContext";
 
-const DOCTOR_ID = "8c33abe0-5d2e-4613-9437-c7c375e8d162";
 const API_BASE = import.meta.env.VITE_API_URL || "https://web-production-e5f38.up.railway.app";
 
 type ConfigRow = {
@@ -52,6 +52,7 @@ function genTimeOptions(start: string, end: string, dur: number): string[] {
 // ── Config (non-schedule rows) ────────────────────────────────────────────────
 
 function useConfig() {
+  const { doctorId: DOCTOR_ID } = useAuth();
   const [rows, setRows] = useState<ConfigRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -76,9 +77,9 @@ function useConfig() {
 
 type SaveKeyResult = { ok: true } | { ok: false; blocked?: string };
 
-async function saveKey(key: string, value: string): Promise<SaveKeyResult> {
+async function saveKey(doctorId: string, key: string, value: string): Promise<SaveKeyResult> {
   try {
-    const r = await fetch(`${API_BASE}/config/${DOCTOR_ID}/${encodeURIComponent(key)}`, {
+    const r = await fetch(`${API_BASE}/config/${doctorId}/${encodeURIComponent(key)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ config_value: value }),
@@ -307,6 +308,7 @@ function DayRow({
 }
 
 function WeeklyScheduleSection() {
+  const { doctorId: DOCTOR_ID } = useAuth();
   const [remote, setRemote] = useState<ClinicScheduleResponse | null>(null);
   const [local, setLocal]   = useState<ClinicScheduleResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -578,6 +580,7 @@ function getOverlapError(
 }
 
 function OnlineConsultationSection() {
+  const { doctorId: DOCTOR_ID } = useAuth();
   const [settings, setSettings] = useState<DoctorOnlineSettings>({
     online_consultation_enabled: false,
     online_consultation_hours: [],
@@ -749,6 +752,8 @@ function OnlineConsultationSection() {
 }
 
 export function Settings() {
+  const { doctorId: DOCTOR_ID, user } = useAuth();
+  const isDoctor = user?.role === "doctor";
   const { rows, loading, error, reload } = useConfig();
   const [localRows, setLocalRows] = useState<ConfigRow[]>([]);
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -769,7 +774,7 @@ export function Settings() {
     const original = rows.reduce<Record<string, string>>((acc, r) => { acc[r.config_key] = r.config_value; return acc; }, {});
     const changed = localRows.filter(r => r.config_value !== original[r.config_key]);
 
-    const results = await Promise.all(changed.map(r => saveKey(r.config_key, r.config_value)));
+    const results = await Promise.all(changed.map(r => saveKey(DOCTOR_ID, r.config_key, r.config_value)));
     const blocked = results.find((r): r is { ok: false; blocked: string } => !r.ok && !!("blocked" in r && r.blocked));
     if (blocked) {
       setSaveState("error");
@@ -809,15 +814,17 @@ export function Settings() {
   return (
     <div className="p-7 space-y-6 max-w-3xl">
 
-      {/* ── Clinic Information ─────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-        <SectionHeader icon={<Building2 size={16} className="text-emerald-600" />} title="Clinic Information" color="bg-emerald-50" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[...clinicInfoRows, ...featureOther].map(r => (
-            <ConfigField key={r.config_key} row={r} onChange={handleChange} />
-          ))}
+      {/* ── Clinic Information (admin only) ────────────── */}
+      {!isDoctor && (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+          <SectionHeader icon={<Building2 size={16} className="text-emerald-600" />} title="Clinic Information" color="bg-emerald-50" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[...clinicInfoRows, ...featureOther].map(r => (
+              <ConfigField key={r.config_key} row={r} onChange={handleChange} />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Weekly Schedule (merged) ───────────────────── */}
       <WeeklyScheduleSection />
@@ -862,8 +869,8 @@ export function Settings() {
         </div>
       </div>
 
-      {/* ── Message Templates ─────────────────────────── */}
-      {templateRows.length > 0 && (
+      {/* ── Message Templates (admin only) ────────────── */}
+      {!isDoctor && templateRows.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
           <SectionHeader icon={<MessageSquare size={16} className="text-amber-600" />} title="Message Templates" color="bg-amber-50" />
           <p className="text-[11px] text-slate-400 mb-4">

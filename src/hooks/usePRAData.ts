@@ -9,16 +9,18 @@ function today() {
 
 type HookResult<T> = { data: T; loading: boolean; error: string | null; refetch: () => void };
 
-function useApiData<T>(fetcher: () => Promise<T>, defaultValue: T): HookResult<T> {
+function useApiData<T>(fetcher: () => Promise<T>, defaultValue: T, pollMs?: number): HookResult<T> {
   const [data, setData] = useState<T>(defaultValue);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
 
   const fetch = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await fetcher();
+      const result = await fetcherRef.current();
       setData(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
@@ -27,7 +29,12 @@ function useApiData<T>(fetcher: () => Promise<T>, defaultValue: T): HookResult<T
     }
   }, []);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => {
+    fetch();
+    if (!pollMs) return;
+    const t = setInterval(fetch, pollMs);
+    return () => clearInterval(t);
+  }, [fetch, pollMs]);
 
   return { data, loading, error, refetch: fetch };
 }
@@ -48,8 +55,9 @@ export function useDashboardStats() {
   );
 }
 
-export function useQueue() {
-  const { doctorId } = useAuth();
+export function useQueue(doctorIdOverride?: string) {
+  const { doctorId: authDoctorId } = useAuth();
+  const doctorId = doctorIdOverride ?? authDoctorId;
   const [data, setData] = useState<QueueStatus>({
     current_token: 0,
     total_today: 0,
@@ -97,20 +105,37 @@ export function useQueue() {
   return { data, loading, error, refetch: fetchData, callNext, callPrev, setToken };
 }
 
-export function useAppointments(date?: string, dateFrom?: string, dateTo?: string) {
-  const { doctorId } = useAuth();
+export function useAppointments(date?: string, dateFrom?: string, dateTo?: string, doctorIdOverride?: string) {
+  const { doctorId: authDoctorId } = useAuth();
+  const doctorId = doctorIdOverride ?? authDoctorId;
   return useApiData<Appointment[]>(
     () => api.appointments.list(doctorId, date, dateFrom, dateTo),
     []
   );
 }
 
-export function useTodayAppointments() {
-  const { doctorId } = useAuth();
-  return useApiData<Appointment[]>(
-    () => api.appointments.today(doctorId),
-    []
-  );
+export function useTodayAppointments(doctorIdOverride?: string) {
+  const { doctorId: authDoctorId } = useAuth();
+  const doctorId = doctorIdOverride ?? authDoctorId;
+  const [data, setData] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try { setData(await api.appointments.today(doctorId)); }
+    catch (e) { setError(e instanceof Error ? e.message : "Unknown error"); }
+    finally { setLoading(false); }
+  }, [doctorId]);
+
+  useEffect(() => {
+    refetch();
+    const t = setInterval(refetch, 30_000);
+    return () => clearInterval(t);
+  }, [refetch]);
+
+  return { data, loading, error, refetch };
 }
 
 export function usePatients(search?: string) {
@@ -153,7 +178,8 @@ export function useFollowUps() {
   const { doctorId } = useAuth();
   const hook = useApiData<FollowUp[]>(
     () => api.followups.list(doctorId),
-    []
+    [],
+    30_000,
   );
 
   const triggerWhatsapp = useCallback(async () => {

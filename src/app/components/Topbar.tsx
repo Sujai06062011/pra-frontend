@@ -1,5 +1,6 @@
-import { Bell, Search, Plus, Calendar } from "lucide-react";
+import { Bell, Search, Calendar, LogOut } from "lucide-react";
 import type { Page } from "./Sidebar";
+import { useAuth } from "../../context/AuthContext";
 
 const pageTitles: Record<Page, string> = {
   dashboard: "Overview",
@@ -24,6 +25,12 @@ const pageTitles: Record<Page, string> = {
 };
 
 export function Topbar({ activePage }: { activePage: Page }) {
+  const { user, logout } = useAuth();
+  if (activePage === "settings" && user?.role === "doctor") {
+    pageTitles["settings"] = "Doctor Settings";
+  } else {
+    pageTitles["settings"] = "Clinic Settings";
+  }
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
 
@@ -65,6 +72,23 @@ export function Topbar({ activePage }: { activePage: Page }) {
         <Bell size={17} />
         <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full border border-white"></span>
       </button>
+
+      {/* User + Logout */}
+      {user && (
+        <div className="hidden md:flex items-center gap-2 pl-2 border-l border-slate-200">
+          <div className="text-right">
+            <p className="text-[12px] font-semibold text-slate-700 leading-tight">{user.name}</p>
+            <p className="text-[11px] text-slate-400 capitalize">{user.role}</p>
+          </div>
+          <button
+            onClick={logout}
+            title="Sign out"
+            className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
+          >
+            <LogOut size={15} />
+          </button>
+        </div>
+      )}
 
     </header>
   );

@@ -95,6 +95,10 @@ export interface DispenseAction {
   qty?: number;
 }
 
+export type FollowUpStatus =
+  | "Pending" | "Whatsapp-Sent" | "Recovered" | "Recovering"
+  | "Needs Appointment" | "Booked" | "No Response" | "Completed" | "Call-Triggered";
+
 export interface FollowUp {
   id: string;
   doctor_id: string;
@@ -102,11 +106,29 @@ export interface FollowUp {
   visit_id?: string;
   scheduled_date?: string;
   channel?: string;
-  call_status?: "Pending" | "Completed";
+  call_status?: FollowUpStatus;
+  response?: string;
   response_notes?: string;
   created_at: string;
+  updated_at?: string;
   completed_at?: string | null;
   patients?: Pick<Patient, "name" | "mobile" | "language">;
+}
+
+export interface FollowUpSummary {
+  total: number;
+  awaiting_reply: number;
+  resolved: number;
+  needs_attention: number;
+  pending: number;
+  whatsapp_sent: number;
+  recovered: number;
+  recovering: number;
+  needs_appointment: number;
+  booked: number;
+  no_response: number;
+  completed: number;
+  call_triggered: number;
 }
 
 export type ConsultationStatus =
@@ -173,6 +195,25 @@ export interface QueueStatus {
   waiting: number;
   completed: number;
   appointments: Appointment[];
+}
+
+export interface AnalyticsSummary {
+  kpis: {
+    total_patients_month: number;
+    patients_seen_month: number;
+    total_patients_change: number | null;
+    avg_daily_appts: number;
+    avg_daily_change: number | null;
+    avg_satisfaction: number | null;
+    followup_rate: number;
+  };
+  monthly_trend: Record<string, string | number>[];
+  appts_by_doctor: Record<string, string | number>[];
+  age_distribution: { group: string; count: number }[];
+  peak_hours: { hour: string; count: number }[];
+  top_conditions: { name: string; value: number }[];
+  retention: { d30: number; d90: number; all_time: number };
+  doctor_names: string[];
 }
 
 export interface Doctor {
@@ -726,6 +767,10 @@ export const api = {
   followups: {
     list: (doctorId: string) =>
       req<FollowUp[]>(`/followups?doctor_id=${doctorId}`),
+    listFiltered: (doctorId: string, days: number = 7, status: string = "all") =>
+      req<FollowUp[]>(`/followups/list?doctor_id=${doctorId}&days=${days}&status=${status}`),
+    summary: (doctorId: string, days: number = 7) =>
+      req<FollowUpSummary>(`/followups/summary?doctor_id=${doctorId}&days=${days}`),
     pending: (doctorId: string) =>
       req<FollowUp[]>(`/followups/pending?doctor_id=${doctorId}`),
     triggerWhatsapp: () =>
@@ -752,6 +797,10 @@ export const api = {
   reviews: {
     list: (doctorId: string) =>
       req<Review[]>(`/reviews?doctor_id=${doctorId}`),
+  },
+
+  analytics: {
+    summary: () => req<AnalyticsSummary>("/analytics/summary"),
   },
 
   doctor: {

@@ -1,5 +1,4 @@
 import { Star, RefreshCw } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useReviews } from "../../../hooks/usePRAData";
 
 const avatarColors = [
@@ -7,11 +6,11 @@ const avatarColors = [
   "from-amber-400 to-orange-500", "from-indigo-400 to-violet-500", "from-violet-400 to-purple-500",
 ];
 
-function Stars({ n, size = 14 }: { n: number; size?: number }) {
+function Stars({ n, size = 14, filledColor = "#f59e0b", emptyStroke = "#d1d5db" }: { n: number; size?: number; filledColor?: string; emptyStroke?: string }) {
   return (
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map(i => (
-        <Star key={i} size={size} fill={i <= n ? "#f59e0b" : "none"} stroke={i <= n ? "#f59e0b" : "#d1d5db"} />
+        <Star key={i} size={size} fill={i <= n ? filledColor : "none"} stroke={i <= n ? filledColor : emptyStroke} />
       ))}
     </div>
   );
@@ -31,7 +30,7 @@ export function Reviews() {
   }));
 
   return (
-    <div className="p-7 space-y-6">
+    <div className="p-4 sm:p-7 space-y-6">
       {error && (
         <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
           <span className="text-[13px] text-rose-700 flex-1">Failed to load reviews.</span>
@@ -47,7 +46,7 @@ export function Reviews() {
           <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 52, lineHeight: 1 }}>
             {loading ? "…" : avgRating.toFixed(1)}
           </div>
-          <Stars n={Math.round(avgRating)} size={16} />
+          <Stars n={Math.round(avgRating)} size={16} filledColor="white" emptyStroke="rgba(255,255,255,0.4)" />
           <div className="text-sm opacity-80 mt-2">Overall Rating</div>
           <div className="text-xs opacity-70 mt-0.5">{loading ? "…" : reviews.length} reviews</div>
         </div>
@@ -55,15 +54,21 @@ export function Reviews() {
         {/* Rating distribution */}
         <div className="sm:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 14 }} className="text-slate-800 mb-4">Rating Breakdown</h3>
-          <ResponsiveContainer width="100%" height={130}>
-            <BarChart data={ratingDist} layout="vertical" barSize={10}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="stars" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={25} />
-              <Tooltip formatter={(v) => [v, "Reviews"]} />
-              <Bar dataKey="count" name="Reviews" radius={[0, 4, 4, 0]} fill="#10b981" />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="space-y-2.5 mt-2">
+            {ratingDist.map(row => {
+              const max = Math.max(...ratingDist.map(r => r.count), 1);
+              const pct = row.count === 0 ? 0 : Math.max((row.count / max) * 100, 4);
+              return (
+                <div key={row.stars} className="flex items-center gap-3">
+                  <span className="text-[11px] text-slate-400 w-6 text-right flex-shrink-0">{row.stars}</span>
+                  <div className="flex-1 bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, background: row.fill }} />
+                  </div>
+                  <span className="text-[11px] font-semibold text-slate-600 w-4 flex-shrink-0">{row.count}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="sm:col-span-1 bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-col justify-center gap-2">
@@ -72,7 +77,7 @@ export function Reviews() {
           </div>
           <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Reviews</div>
           <div className="text-[11px] text-slate-400 mt-1">
-            {reviews.filter(r => (r.rating ?? 0) >= 4).length} positive · {reviews.filter(r => (r.rating ?? 0) <= 3).length} neutral/negative
+            {reviews.filter(r => (r.rating ?? 0) >= 4).length} positive · {reviews.filter(r => (r.rating ?? 0) === 3).length} neutral · {reviews.filter(r => (r.rating ?? 0) <= 2).length} negative
           </div>
         </div>
       </div>

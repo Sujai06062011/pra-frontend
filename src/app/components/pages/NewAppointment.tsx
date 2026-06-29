@@ -2,8 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { ArrowLeft, Search, Calendar, CheckCircle2, Ban, Video, Building2 } from "lucide-react";
 import { api } from "../../../lib/api";
 import type { Patient, SlotInfo, BookingResult, SlotsResponse, OnlineSlot, OnlineSlotsResponse } from "../../../lib/api";
-
-const DOCTOR_ID = "8c33abe0-5d2e-4613-9437-c7c375e8d162";
+import { useAuth } from "../../../context/AuthContext";
 
 type Step = "select-patient" | "book-slot" | "success";
 
@@ -151,6 +150,7 @@ export function NewAppointment({
   onNavigate?: (page: import("../Sidebar").Page) => void;
   onRegisterPatient?: () => void;
 } = {}) {
+  const { doctorId: DOCTOR_ID } = useAuth();
   const params = new URLSearchParams(window.location.search);
   const presetPatientId = patientIdProp || params.get("patient_id") || "";
 

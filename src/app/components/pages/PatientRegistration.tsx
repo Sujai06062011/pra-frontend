@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { ArrowLeft, Search, CheckCircle2, Users, User, Calendar, Phone } from "lucide-react";
 import { api } from "../../../lib/api";
 import type { Patient } from "../../../lib/api";
-
-const DOCTOR_ID = "8c33abe0-5d2e-4613-9437-c7c375e8d162";
+import { useAuth } from "../../../context/AuthContext";
 
 type Step = "lookup" | "new-patient" | "family-member" | "success";
 
@@ -91,6 +90,7 @@ export function PatientRegistration({
   onNavigate?: (page: import("../Sidebar").Page) => void;
   onBookAppointment?: (patientId: string) => void;
 } = {}) {
+  const { doctorId: DOCTOR_ID } = useAuth();
   const [step, setStep] = useState<Step>("lookup");
   const [searchQuery, setSearchQuery] = useState("");
   const [mobile, setMobile] = useState(""); // kept for registration form

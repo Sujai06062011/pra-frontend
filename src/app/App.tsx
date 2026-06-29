@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Login } from "./components/pages/Login";
 import { Sidebar } from "./components/Sidebar";
 import type { Page } from "./components/Sidebar";
 import { useQueries, useFollowUps, useTodayAppointments } from "../hooks/usePRAData";
@@ -25,13 +26,13 @@ import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
 export default function App() {
-  const { doctorId } = useAuth();
+  const { doctorId, user, loading: authLoading } = useAuth();
   const [activePage, setActivePage] = useState<Page>("dashboard");
   const [newApptPatientId, setNewApptPatientId] = useState<string>("");
   const [rxParams, setRxParams] = useState<{ patientId?: string; appointmentId?: string; prescriptionId?: string }>({});
   const { data: queries } = useQueries();
   const { data: followUps } = useFollowUps();
-  const { data: todayAppointments } = useTodayAppointments();
+  const { data: todayAppointments } = useTodayAppointments(doctorId);
   const [consultationsBadge, setConsultationsBadge] = useState(0);
 
   const queriesBadge     = queries.filter(q => q.status === "Pending").length;
@@ -60,28 +61,30 @@ export default function App() {
   };
 
   const renderPage = () => {
+    const k = activePage;
     switch (activePage) {
-      case "dashboard": return <Dashboard onNavigate={setActivePage} />;
-      case "appointments": return <Appointments onPrescribe={(patientId, appointmentId) => { setRxParams({ patientId, appointmentId }); setActivePage("new-prescription"); }} />;
-      case "availability": return <Availability />;
-      case "queue": return <Queue onPrescribe={(patientId, appointmentId) => { setRxParams({ patientId, appointmentId }); setActivePage("new-prescription"); }} />;
-      case "patients": return <Patients />;
+      case "dashboard": return <Dashboard key={k} onNavigate={setActivePage} />;
+      case "appointments": return <Appointments key={k} onPrescribe={(patientId, appointmentId) => { setRxParams({ patientId, appointmentId }); setActivePage("new-prescription"); }} />;
+      case "availability": return <Availability key={k} />;
+      case "queue": return <Queue key={k} onPrescribe={(patientId, appointmentId) => { setRxParams({ patientId, appointmentId }); setActivePage("new-prescription"); }} />;
+      case "patients": return <Patients key={k} />;
       case "prescriptions": return (
         <Prescriptions
+          key={k}
           onNewPrescription={() => { setRxParams({}); setActivePage("new-prescription"); }}
           onEditPrescription={(patientId, prescriptionId) => { setRxParams({ patientId, prescriptionId }); setActivePage("new-prescription"); }}
         />
       );
-      case "medicines": return <ClinicMedicines />;
-      case "medicines-alerts": return <ClinicMedicines initialTab="alerts" />;
-      case "dispensary": return <Dispensary />;
-      case "consultations": return <ConsultationsPage />;
-      case "lab": return <LabReports />;
-      case "queries": return <Queries />;
-      case "followups": return <FollowUps />;
-      case "reviews": return <Reviews />;
-      case "analytics": return <Analytics />;
-      case "settings": return <Settings />;
+      case "medicines": return <ClinicMedicines key={k} />;
+      case "medicines-alerts": return <ClinicMedicines key={k} initialTab="alerts" />;
+      case "dispensary": return <Dispensary key={k} />;
+      case "consultations": return <ConsultationsPage key={k} />;
+      case "lab": return <LabReports key={k} />;
+      case "queries": return <Queries key={k} />;
+      case "followups": return <FollowUps key={k} />;
+      case "reviews": return <Reviews key={k} />;
+      case "analytics": return <Analytics key={k} />;
+      case "settings": return <Settings key={k} />;
       case "new-appointment": return (
         <NewAppointment
           key={newApptPatientId}
@@ -108,6 +111,16 @@ export default function App() {
       default: return <Dashboard />;
     }
   };
+
+  // Auth gate
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!user) return <Login />;
 
   return (
     <div className="min-h-screen bg-slate-50" style={{ fontFamily: "'DM Sans', sans-serif" }}>
