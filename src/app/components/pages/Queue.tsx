@@ -15,6 +15,7 @@ import {
   getNextAppointment,
   getPrevAppointment,
   isAllDone,
+  isLate,
   patientName,
 } from "../../../utils/queueUtils";
 
@@ -40,20 +41,30 @@ function minutesSince(appointmentTime?: string): number {
   return Math.max(0, Math.floor((now.getTime() - scheduled.getTime()) / 60000));
 }
 
-// Queue sort: In Progress → Waiting → No-Show → Done → Cancelled
+// Queue sort: In Progress → Returned (skipped, past slot) → Waiting/Returned (future slot, by time) → Late → Done → No-Show → Cancelled
 const Q_ORDER: Record<string, number> = {
-  "in-progress": 0,
-  waiting:       1,
-  done:          2,
-  "no-show":     3,
-  cancelled:     4,
+  "in-progress":     0,
+  "returned-past":   1,  // returned AND original slot already passed — jumps ahead
+  waiting:           2,  // includes returned patients whose slot is still upcoming
+  returned:          2,  // same priority as waiting, sorted by slot time
+  late:              3,
+  done:              4,
+  "no-show":         5,
+  cancelled:         6,
 };
 
-function queueStatus(p: Appointment): string {
+function queueStatus(p: Appointment, currentServingTime?: string): string {
   if (p.status === "Cancelled") return "cancelled";
   if (p.status === "No-Show") return "no-show";
+  if (p.status === "Late") return "late";
   if (p.status === "In Progress" || p.queue_status === "In Progress") return "in-progress";
-  if (p.status === "Completed" || p.queue_status === "Done") return "done";
+  if (p.status === "Completed") return "done";
+  if (p.returned_at) {
+    // If their slot was before the current serving time, they were skipped → jump ahead
+    if (currentServingTime && (p.appointment_time ?? "") <= currentServingTime) return "returned-past";
+    return "returned";
+  }
+  if (p.queue_status === "Done") return "done";
   return "waiting";
 }
 
@@ -61,9 +72,9 @@ function tokenNum(tok?: string | number | null): number {
   const s = String(tok ?? ""); const m = s.match(/(\d+)$/); return m ? parseInt(m[1], 10) : 0;
 }
 
-function sortQueue(appts: Appointment[]): Appointment[] {
+function sortQueue(appts: Appointment[], currentServingTime?: string): Appointment[] {
   return [...appts].sort((a, b) => {
-    const sd = (Q_ORDER[queueStatus(a)] ?? 9) - (Q_ORDER[queueStatus(b)] ?? 9);
+    const sd = (Q_ORDER[queueStatus(a, currentServingTime)] ?? 9) - (Q_ORDER[queueStatus(b, currentServingTime)] ?? 9);
     return sd !== 0 ? sd : tokenNum(a.display_token ?? a.token_number) - tokenNum(b.display_token ?? b.token_number);
   });
 }
@@ -192,10 +203,25 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
   // Optimistic overrides: id → "No-Show" so UI updates immediately
   const [optimisticNoShows, setOptimisticNoShows] = useState<Set<string>>(new Set());
 
-  const currentPatient = getCurrentAppointment(appointments);
-  const firstPatient = getFirstAppointment(appointments);
-  const allDone = isAllDone(appointments);
-  const prevResult = currentPatient ? getPrevAppointment(currentPatient, appointments) : null;
+  // Late state
+  const [lateBusyIds, setLateBusyIds] = useState<Set<string>>(new Set());
+  const [optimisticLates, setOptimisticLates] = useState<Map<string, "Late" | "returned">>(new Map());
+
+  // Optimistic-patched list used for ALL queue logic and display
+  const patchedAppointments = appointments.map(p => {
+    // Never override a terminal status from the server
+    const terminal = p.status === "Completed" || p.status === "In Progress" || p.status === "No-Show" || p.status === "Cancelled";
+    if (!terminal && optimisticNoShows.has(p.id)) return { ...p, status: "No-Show" as const };
+    const lateOpt = !terminal && optimisticLates.get(p.id);
+    if (lateOpt === "Late") return { ...p, status: "Late" as const };
+    if (lateOpt === "returned") return { ...p, status: "Confirmed" as const, returned_at: new Date().toISOString() };
+    return p;
+  });
+
+  const currentPatient = getCurrentAppointment(patchedAppointments);
+  const firstPatient = getFirstAppointment(patchedAppointments);
+  const allDone = isAllDone(patchedAppointments);
+  const prevResult = currentPatient ? getPrevAppointment(currentPatient, patchedAppointments) : null;
 
   const isNextDisabled = loading || busy || allDone;
   const isPrevDisabled = loading || busy || !currentPatient || !prevResult;
@@ -234,14 +260,14 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
     });
 
   const handleNext = async () => {
-    const current = getCurrentAppointment(appointments);
+    const current = getCurrentAppointment(patchedAppointments);
     if (!current) {
-      const first = getFirstPendingAppointment(appointments);
+      const first = getFirstPendingAppointment(patchedAppointments);
       if (!first) return;
       await advanceToAppointment(first, null);
       return;
     }
-    const next = getNextAppointment(current, appointments);
+    const next = getNextAppointment(current, patchedAppointments);
     if (!next) { await finishLastPatient(current); return; }
     if (next.crossSession && next.targetSession) {
       setPendingAction({ type: "next", targetAppointment: next.appointment, targetSession: next.targetSession });
@@ -252,9 +278,9 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
   };
 
   const handlePrev = async () => {
-    const current = getCurrentAppointment(appointments);
+    const current = getCurrentAppointment(patchedAppointments);
     if (!current) return;
-    const prev = getPrevAppointment(current, appointments);
+    const prev = getPrevAppointment(current, patchedAppointments);
     if (!prev) return;
     if (prev.crossSession && prev.targetSession) {
       setPendingAction({ type: "prev", targetAppointment: prev.appointment, targetSession: prev.targetSession });
@@ -266,7 +292,7 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
 
   const handleSessionConfirm = async () => {
     if (!pendingAction) return;
-    const current = getCurrentAppointment(appointments);
+    const current = getCurrentAppointment(patchedAppointments);
     if (pendingAction.type === "next") {
       await advanceToAppointment(pendingAction.targetAppointment, current);
     } else if (current) {
@@ -277,6 +303,39 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
   };
 
   const handleSessionCancel = () => { setShowSessionPopup(false); setPendingAction(null); };
+
+  // ── Late / Return handlers ────────────────────────────────
+  const handleMarkLate = useCallback(async (appt: Appointment) => {
+    setLateBusyIds(prev => new Set(prev).add(appt.id));
+    setOptimisticLates(prev => new Map(prev).set(appt.id, "Late"));
+    try {
+      await api.appointments.markLate(appt.id);
+      const token = appt.display_token || appt.token_number || "";
+      setToast(`${token} marked as Late — queue skipped.`);
+      setTimeout(() => refetch(), 1500);
+    } catch {
+      setOptimisticLates(prev => { const m = new Map(prev); m.delete(appt.id); return m; });
+      setActionError("Failed to mark as Late");
+    } finally {
+      setLateBusyIds(prev => { const s = new Set(prev); s.delete(appt.id); return s; });
+    }
+  }, [refetch]);
+
+  const handleMarkReturned = useCallback(async (appt: Appointment) => {
+    setLateBusyIds(prev => new Set(prev).add(appt.id));
+    setOptimisticLates(prev => new Map(prev).set(appt.id, "returned"));
+    try {
+      await api.appointments.markReturned(appt.id);
+      const token = appt.display_token || appt.token_number || "";
+      setToast(`${token} is back — moved up in queue.`);
+      setTimeout(() => refetch(), 1500);
+    } catch {
+      setOptimisticLates(prev => { const m = new Map(prev); m.delete(appt.id); return m; });
+      setActionError("Failed to mark as returned");
+    } finally {
+      setLateBusyIds(prev => { const s = new Set(prev); s.delete(appt.id); return s; });
+    }
+  }, [refetch]);
 
   // ── No Show confirm ──────────────────────────────────────
   const handleNoShowConfirm = useCallback(async (sendWhatsapp: boolean) => {
@@ -311,20 +370,19 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
     }
   }, [noShowTarget, refetch]);
 
-  const eveningWaitingCount = appointments.filter(p =>
+  const currentServingTime = currentPatient?.appointment_time ?? undefined;
+  const displayAppointments = sortQueue(patchedAppointments, currentServingTime);
+
+  const eveningWaitingCount = patchedAppointments.filter(p =>
     isEvening(p.appointment_time) &&
     p.status !== "Cancelled" && p.status !== "No-Show" && p.status !== "Completed" && p.queue_status !== "Done"
   ).length;
 
-  // Apply optimistic no-shows then sort
-  const displayAppointments = sortQueue(
-    appointments.map(p =>
-      optimisticNoShows.has(p.id) ? { ...p, status: "No-Show" as const } : p
-    )
-  );
-
-  // Waiting count excludes No-Show patients
-  const waitingCount = displayAppointments.filter(p => queueStatus(p) === "waiting").length;
+  // Waiting count: Waiting + Returned (not Late, not No-Show)
+  const waitingCount = displayAppointments.filter(p => {
+    const s = queueStatus(p, currentServingTime);
+    return s === "waiting" || s === "returned" || s === "returned-past";
+  }).length;
 
   return (
     <div className="p-7 space-y-6">
@@ -460,12 +518,15 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
         ) : (
           <div className="divide-y divide-slate-50">
             {displayAppointments.map((p, idx) => {
-              const qs = queueStatus(p);
+              const qs = queueStatus(p, currentServingTime);
               const isCancelled = qs === "cancelled";
               const isNoShow    = qs === "no-show";
               const isCurrent   = qs === "in-progress";
               const isDone      = qs === "done";
               const isWaiting   = qs === "waiting";
+              const isPatientLate     = qs === "late";
+              const isReturned  = qs === "returned" || qs === "returned-past";
+              const isLateBusy  = lateBusyIds.has(p.id);
               const isFlashing  = justNoShowedIds.has(p.id);
               const color = avatarColors[idx % avatarColors.length];
               const name = p.patients?.name || "Unknown";
@@ -475,21 +536,25 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
                   key={p.id}
                   style={{ transition: "background-color 0.4s ease-in-out" }}
                   className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-5 py-3.5 transition-colors ${
-                    isFlashing  ? "bg-amber-100" :
-                    isCancelled ? "opacity-40 bg-white" :
-                    isNoShow    ? "bg-amber-50/60" :
-                    isCurrent   ? "bg-emerald-50" : "hover:bg-slate-50"
+                    isFlashing     ? "bg-amber-100" :
+                    isCancelled    ? "opacity-40 bg-white" :
+                    isNoShow       ? "bg-amber-50/60" :
+                    isPatientLate  ? "bg-orange-50/70 opacity-70" :
+                    isReturned     ? "bg-blue-50" :
+                    isCurrent      ? "bg-emerald-50" : "hover:bg-slate-50"
                   }`}
                 >
                   {/* Line 1 on mobile: token + avatar + name/age */}
                   <div className="flex items-center gap-3 min-w-0">
                     {/* Token number */}
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-[14px] font-bold flex-shrink-0 ${
-                      isCancelled ? "bg-slate-200 text-slate-400" :
-                      isNoShow    ? "bg-amber-100 text-amber-500" :
-                      isCurrent   ? "bg-emerald-500 text-white shadow-sm shadow-emerald-200" :
-                      isDone      ? "bg-slate-100 text-slate-400" :
-                                    "bg-slate-100 text-slate-600"
+                      isCancelled   ? "bg-slate-200 text-slate-400" :
+                      isNoShow      ? "bg-amber-100 text-amber-500" :
+                      isPatientLate ? "bg-orange-100 text-orange-400" :
+                      isReturned    ? "bg-blue-100 text-blue-600" :
+                      isCurrent     ? "bg-emerald-500 text-white shadow-sm shadow-emerald-200" :
+                      isDone        ? "bg-slate-100 text-slate-400" :
+                                      "bg-slate-100 text-slate-600"
                     }`}>
                       {p.display_token || p.token_number || "—"}
                     </div>
@@ -558,8 +623,55 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
                           <Clock size={11} /> Waiting
                         </span>
                         <button
+                          onClick={() => handleMarkLate(p)}
+                          disabled={isLateBusy}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-orange-300 text-orange-600 hover:bg-orange-50 transition-colors disabled:opacity-50"
+                        >
+                          <Clock size={11} /> Late
+                        </button>
+                        <button
                           onClick={() => setNoShowTarget(p)}
-                          className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-orange-300 text-orange-600 hover:bg-orange-50 transition-colors"
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-slate-300 text-slate-500 hover:bg-slate-50 transition-colors"
+                        >
+                          <UserX size={11} /> No Show
+                        </button>
+                      </>
+                    )}
+                    {isPatientLate && (
+                      <>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-orange-50 text-orange-600 border border-orange-200">
+                          <Clock size={11} /> Late
+                        </span>
+                        <button
+                          onClick={() => handleMarkReturned(p)}
+                          disabled={isLateBusy}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors shadow-sm disabled:opacity-50"
+                        >
+                          ✓ Here Now
+                        </button>
+                        <button
+                          onClick={() => setNoShowTarget(p)}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-slate-300 text-slate-500 hover:bg-slate-50 transition-colors"
+                        >
+                          <UserX size={11} /> No Show
+                        </button>
+                      </>
+                    )}
+                    {isReturned && (
+                      <>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                          ↩ Returned
+                        </span>
+                        <button
+                          onClick={() => handleMarkLate(p)}
+                          disabled={isLateBusy}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-orange-300 text-orange-600 hover:bg-orange-50 transition-colors disabled:opacity-50"
+                        >
+                          <Clock size={11} /> Late
+                        </button>
+                        <button
+                          onClick={() => setNoShowTarget(p)}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-slate-300 text-slate-500 hover:bg-slate-50 transition-colors"
                         >
                           <UserX size={11} /> No Show
                         </button>

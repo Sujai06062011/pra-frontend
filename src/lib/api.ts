@@ -22,7 +22,8 @@ export interface Appointment {
   token_number?: number;
   display_token?: string | null;
   queue_status?: "Waiting" | "In Progress" | "Done" | "Cancelled" | "No-Show";
-  status: "Confirmed" | "In Progress" | "Completed" | "Cancelled" | "No-Show";
+  status: "Confirmed" | "In Progress" | "Completed" | "Cancelled" | "No-Show" | "Late";
+  returned_at?: string | null;
   patients?: Patient;
   created_at: string;
 }
@@ -596,6 +597,16 @@ export const api = {
         `/appointments/${id}/no-show`,
         { method: "POST", body: JSON.stringify({ send_whatsapp }) }
       ),
+    markLate: (id: string) =>
+      req<Appointment>(`/appointments/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "Late" }),
+      }),
+    markReturned: (id: string) =>
+      req<Appointment>(`/appointments/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "Confirmed", returned_at: new Date().toISOString() }),
+      }),
     bulkCancel: (appointment_ids: string[], reason = "doctor_unavailable", notify_whatsapp = true) =>
       req<{ cancelled: string[]; failed: string[]; whatsapp_sent: number; whatsapp_failed: number }>(
         "/appointments/bulk-cancel",
