@@ -197,6 +197,7 @@ function DayRow({
 }) {
   const isWeekday = !["saturday", "sunday"].includes(dayMeta.key);
   const dur = dayData.slot_duration_minutes || 10;
+  const [showDurInfo, setShowDurInfo] = useState(false);
 
   const allOpts    = genTimeOptions(FULL_DAY_START, FULL_DAY_END, dur);
   const mStartOpts = allOpts.slice(0, -1);
@@ -229,12 +230,18 @@ function DayRow({
               <Clock size={11} className="text-slate-400" />
               <select
                 value={dur}
-                onChange={e => onChange({ slot_duration_minutes: Number(e.target.value) })}
+                onChange={e => { onChange({ slot_duration_minutes: Number(e.target.value) }); setShowDurInfo(true); }}
                 className="px-2 py-0.5 text-[11px] border border-slate-200 rounded-lg text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-300"
               >
                 {[5, 10, 15, 20, 30].map(v => <option key={v} value={v}>{v} min</option>)}
               </select>
             </div>
+
+            {showDurInfo && (
+              <span className="text-[10px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2 py-0.5">
+                Dates with existing bookings keep their old slot times. New duration applies to empty dates only.
+              </span>
+            )}
 
             {isWeekday && (
               <button type="button" onClick={onCopyToWeekdays}

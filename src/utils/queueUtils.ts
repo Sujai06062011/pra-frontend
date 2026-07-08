@@ -89,11 +89,12 @@ export const getNextAppointment = (
     .sort(byQueuePriority);
 
   // Returned patients whose slot was already passed jump ahead (they were skipped)
-  const skippedReturned = sameSessionCandidates.find(
-    a => !!a.returned_at && (a.appointment_time ?? "") <= curTime
-  );
-  if (skippedReturned) {
-    return { appointment: skippedReturned, crossSession: false, targetSession: null };
+  // Among multiple, pick the one who returned earliest
+  const skippedReturnedList = sameSessionCandidates
+    .filter(a => !!a.returned_at && (a.appointment_time ?? "") <= curTime)
+    .sort((a, b) => (a.returned_at ?? "").localeCompare(b.returned_at ?? ""));
+  if (skippedReturnedList.length > 0) {
+    return { appointment: skippedReturnedList[0], crossSession: false, targetSession: null };
   }
 
   // Regular waiting: next by slot time (includes returned patients with future slots)

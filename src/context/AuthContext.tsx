@@ -12,6 +12,7 @@ export interface AuthUser {
   role: StaffRole;
   doctorId: string | null;   // set only for role='doctor'
   clinicWhatsapp: string;
+  speciality: string;
 }
 
 interface AuthContextValue {
@@ -106,5 +107,6 @@ function mapUser(data: Record<string, unknown>): AuthUser {
     role: data.role as StaffRole,
     doctorId: (data.doctor_id as string) || null,
     clinicWhatsapp: (data.clinic_whatsapp as string) || "",
+    speciality: (data.speciality as string) || "",
   };
 }

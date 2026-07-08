@@ -1,16 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  ArrowLeft, Printer, MessageSquare, Plus, Loader2, CheckCircle, AlertCircle,
-  Stethoscope, Apple, Pill, FileText, User, Calendar, Hash, Phone, Globe,
-  Search, UserX, UserCheck, ChevronRight,
+  ArrowLeft, MessageSquare, Plus, Loader2, CheckCircle, AlertCircle,
+  Stethoscope, Apple, Pill, User, Calendar, Mic, Square, FileDown,
+  Search, UserX, UserCheck, ChevronRight, ClipboardList,
 } from "lucide-react";
 import { api, type Patient, type VisitVitals } from "../../../lib/api";
 import { VitalsSection } from "../shared/VitalsSection";
 import { MedicineRow, makeDefaultTimings, type MedicineFormRow } from "../prescription/MedicineRow";
-import {
-  DIAGNOSIS_SUGGESTIONS, DIETARY_NOTES_OPTIONS,
-  PRECAUTION_OPTIONS,
-} from "../../../lib/medicineConstants";
 import { useAuth } from "../../../context/AuthContext";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -27,41 +23,12 @@ function makeEmptyMed(): MedicineFormRow {
   };
 }
 
-function ChipSuggest({
-  options, onSelect, onDeselect, currentValue = "",
-}: {
-  options: string[];
-  onSelect: (v: string) => void;
-  onDeselect: (v: string) => void;
-  currentValue?: string;
-}) {
-  return (
-    <div className="flex flex-wrap gap-1.5 mt-2">
-      {options.map(opt => {
-        const selected = currentValue.toLowerCase().includes(opt.toLowerCase());
-        return (
-          <button
-            key={opt}
-            type="button"
-            onClick={() => selected ? onDeselect(opt) : onSelect(opt)}
-            className={`px-2.5 py-1 text-[11px] rounded-full border font-medium transition-colors ${
-              selected
-                ? "bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600"
-                : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300"
-            }`}
-          >
-            {selected ? "✓ " : ""}{opt}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 function SectionCard({
-  icon, title, accent, children,
+  icon, title, accent, children, headerAction,
 }: {
   icon: React.ReactNode; title: string; accent: string; children: React.ReactNode;
+  headerAction?: React.ReactNode;
 }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -70,8 +37,167 @@ function SectionCard({
         <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 13 }} className="text-slate-800">
           {title}
         </h3>
+        {headerAction && <div className="ml-auto">{headerAction}</div>}
       </div>
       <div className="p-5 space-y-4">{children}</div>
+    </div>
+  );
+}
+
+// ─── AI Recorder ─────────────────────────────────────────────────────────────
+
+interface ExtractedData {
+  chief_complaint?: string | null;
+  diagnosis?: string | null;
+  past_history?: string | null;
+  allergies?: string | null;
+  lab_findings?: string | null;
+  dietary_instructions?: string | null;
+  precautions?: string | null;
+  medicines?: Array<{
+    name: string; strength?: string | null; duration_days?: number;
+    morning?: boolean; afternoon?: boolean; evening?: boolean; night?: boolean;
+    instructions?: string | null;
+  }>;
+  vitals?: {
+    temperature?: string | null; bp?: string | null;
+    pulse?: string | null; spo2?: string | null; weight?: string | null;
+  };
+}
+
+type RecorderState = "idle" | "recording" | "processing" | "done" | "error";
+
+function AIRecorder({ onExtracted, apiBase }: {
+  onExtracted: (data: ExtractedData) => void;
+  apiBase: string;
+}) {
+  const [state, setState]           = useState<RecorderState>("idle");
+  const [seconds, setSeconds]       = useState(0);
+  const [transcript, setTranscript] = useState("");
+  const [showTx, setShowTx]         = useState(false);
+  const [errMsg, setErrMsg]         = useState("");
+  const mediaRef  = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+  const start = async () => {
+    setErrMsg(""); setTranscript(""); setShowTx(false);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      mediaRef.current  = mr;
+      chunksRef.current = [];
+      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        if (timerRef.current) clearInterval(timerRef.current);
+        setState("processing");
+        await process();
+      };
+      mr.start(200);
+      setState("recording");
+      setSeconds(0);
+      timerRef.current = setInterval(() => {
+        setSeconds(s => s + 1);
+      }, 1000);
+    } catch (e: any) {
+      setErrMsg(e?.message?.includes("denied") ? "Microphone permission denied" : "Could not access microphone");
+      setState("error");
+    }
+  };
+
+  const stop = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    mediaRef.current?.stop();
+  };
+
+  const process = async () => {
+    try {
+      const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+      const fd = new FormData();
+      fd.append("audio", blob, "recording.webm");
+
+      const txRes = await fetch(`${apiBase}/prescriptions/transcribe`, { method: "POST", body: fd });
+      if (!txRes.ok) throw new Error("Transcription failed");
+      const { transcript: tx } = await txRes.json();
+      setTranscript(tx);
+
+      const exRes = await fetch(`${apiBase}/prescriptions/extract`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript: tx }),
+      });
+      if (!exRes.ok) throw new Error("Extraction failed");
+      const extracted: ExtractedData = await exRes.json();
+      onExtracted(extracted);
+      setState("done");
+    } catch (e: any) {
+      setErrMsg(e?.message || "Processing failed");
+      setState("error");
+    }
+  };
+
+  if (state === "idle" || state === "error") return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        title="Record consultation to auto-fill prescription"
+        onClick={start}
+        className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 bg-white hover:bg-slate-50 text-slate-600 text-[12px] font-semibold rounded-lg transition-colors"
+      >
+        <Mic size={13} className="text-slate-500" /> AI Recorder
+      </button>
+      {state === "error" && errMsg && (
+        <span className="text-[10px] text-red-500">{errMsg}</span>
+      )}
+    </div>
+  );
+
+  if (state === "recording") return (
+    <button
+      type="button"
+      onClick={stop}
+      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-[12px] font-bold rounded-lg animate-pulse transition-colors"
+    >
+      <Square size={11} fill="white" /> Stop ({fmt(seconds)})
+    </button>
+  );
+
+  if (state === "processing") return (
+    <div className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-slate-500 font-medium">
+      <Loader2 size={13} className="animate-spin text-blue-500" /> Transcribing…
+    </div>
+  );
+
+  // done
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-2">
+        <span className="text-[12px] text-emerald-600 font-semibold">✅ Auto-filled</span>
+        <button
+          type="button"
+          onClick={() => { setState("idle"); setTranscript(""); }}
+          className="text-[11px] text-slate-400 hover:text-slate-600 underline"
+        >
+          Reset
+        </button>
+      </div>
+      {transcript && (
+        <button
+          type="button"
+          onClick={() => setShowTx(v => !v)}
+          className="text-[11px] text-slate-400 hover:text-slate-600 underline"
+        >
+          {showTx ? "Hide" : "View"} transcript
+        </button>
+      )}
+      {showTx && transcript && (
+        <div className="mt-1 max-w-xs text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-2 leading-relaxed text-right">
+          {transcript}
+        </div>
+      )}
     </div>
   );
 }
@@ -293,6 +419,186 @@ function WalkinPanel({ name, age, onChangeName, onChangeAge }: {
   );
 }
 
+// ─── Live Prescription Preview ──────────────────────────────────────────────
+
+interface PreviewProps {
+  clinicName: string;
+  doctorName: string;
+  patientName: string;
+  patientAge?: number | string;
+  patientGender?: string;
+  vitals: VisitVitals;
+  chiefComplaint: string;
+  diagnosis: string;
+  pastHistory: string;
+  allergies: string;
+  labFindings: string;
+  medicines: MedicineFormRow[];
+  dietary: string;
+  precautions: string;
+  notes: string;
+  followupDate: string;
+}
+
+function timingDoseStr(m: MedicineFormRow): string {
+  const slots = [
+    m.timings.morning.enabled   && `M(${m.timings.morning.qty})`,
+    m.timings.afternoon.enabled && `A(${m.timings.afternoon.qty})`,
+    m.timings.evening.enabled   && `E(${m.timings.evening.qty})`,
+    m.timings.night.enabled     && `N(${m.timings.night.qty})`,
+  ].filter(Boolean) as string[];
+  return slots.join("-") || "—";
+}
+
+function foodStr(m: MedicineFormRow): string {
+  const first = [m.timings.morning, m.timings.afternoon, m.timings.evening, m.timings.night].find(t => t.enabled);
+  return first ? (first.before_food ? "Before food" : "After food") : "";
+}
+
+function PrescriptionPreview({
+  clinicName, doctorName, patientName, patientAge, patientGender,
+  vitals, chiefComplaint, diagnosis, pastHistory, allergies, labFindings,
+  medicines, dietary, precautions, notes, followupDate,
+}: PreviewProps) {
+  const today = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  const validMeds = medicines.filter(m => m.medicine_name.trim());
+  const genderLabel = patientGender === "M" ? "Male" : patientGender === "F" ? "Female" : patientGender || "";
+
+  const vitalsRow = [
+    vitals.bp_systolic && vitals.bp_diastolic && `BP: ${vitals.bp_systolic}/${vitals.bp_diastolic} mmHg`,
+    vitals.pulse_bpm && `Pulse: ${vitals.pulse_bpm} bpm`,
+    vitals.temperature_f && `Temp: ${vitals.temperature_f}°F`,
+    vitals.weight_kg && `Wt: ${vitals.weight_kg} kg`,
+    vitals.height_cm && `Ht: ${vitals.height_cm} cm`,
+    vitals.spo2_percent && `SpO2: ${vitals.spo2_percent}%`,
+  ].filter(Boolean) as string[];
+
+  const adviceLines = [dietary, precautions, notes].filter(Boolean);
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden sticky top-20 text-slate-800" style={{ fontFamily: "Georgia, serif", fontSize: 12 }}>
+
+      {/* Clinic header */}
+      <div className="px-5 pt-4 pb-3 border-b-2 border-slate-800">
+        <div className="text-[15px] font-bold leading-tight" style={{ fontFamily: "'Syne', sans-serif" }}>{clinicName || "Clinic Name"}</div>
+        <div className="text-[11px] text-slate-600 mt-0.5" style={{ fontFamily: "sans-serif" }}>{doctorName}</div>
+        <div className="text-[10px] text-slate-400 mt-0.5" style={{ fontFamily: "sans-serif" }}>Date: {today}</div>
+      </div>
+
+      <div className="px-5 py-3 space-y-3">
+
+        {/* Patient info row */}
+        <div className="flex items-center gap-3 text-[11px] border border-slate-200 rounded-lg px-3 py-2 bg-slate-50" style={{ fontFamily: "sans-serif" }}>
+          <span className="font-semibold text-slate-700 flex-1 truncate">{patientName || "Patient Name"}</span>
+          {patientAge && <span className="text-slate-500 flex-shrink-0">{patientAge} yrs</span>}
+          {genderLabel && <span className="text-slate-500 flex-shrink-0">{genderLabel}</span>}
+        </div>
+
+        {/* Vitals bar */}
+        {vitalsRow.length > 0 && (
+          <div className="border-l-4 border-teal-500 pl-3 py-1 bg-teal-50 rounded-r-lg text-[10px] text-teal-800 leading-relaxed" style={{ fontFamily: "sans-serif" }}>
+            {vitalsRow.join("  ·  ")}
+          </div>
+        )}
+
+        {/* Rx symbol */}
+        <div className="text-[28px] font-bold text-slate-800 leading-none" style={{ fontFamily: "Georgia, serif" }}>℞</div>
+
+        {/* Chief Complaints */}
+        {chiefComplaint && (
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1" style={{ fontFamily: "sans-serif" }}>Chief Complaints</div>
+            <div className="text-[12px] text-slate-700">{chiefComplaint}</div>
+          </div>
+        )}
+
+        {/* Diagnosis */}
+        {diagnosis && (
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1" style={{ fontFamily: "sans-serif" }}>Diagnosis</div>
+            <div className="text-[12px] font-semibold text-indigo-700">{diagnosis}</div>
+          </div>
+        )}
+
+        {/* History */}
+        {(pastHistory || allergies || labFindings) && (
+          <div className="bg-purple-50 border border-purple-100 rounded-lg px-3 py-2 space-y-1" style={{ fontFamily: "sans-serif" }}>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-purple-400 mb-1">History</div>
+            {pastHistory && <div className="text-[10px] text-slate-600"><span className="font-semibold text-slate-700">Past History: </span>{pastHistory}</div>}
+            {allergies && (
+              <div className="text-[10px]">
+                <span className="font-semibold text-slate-700">Allergies: </span>
+                <span className={allergies.toUpperCase() === "NKDA" ? "text-slate-500" : "text-red-600 font-semibold"}>{allergies}</span>
+              </div>
+            )}
+            {labFindings && <div className="text-[10px] text-slate-600"><span className="font-semibold text-slate-700">Investigations: </span>{labFindings}</div>}
+          </div>
+        )}
+
+        {/* Medicines */}
+        {validMeds.length > 0 && (
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5" style={{ fontFamily: "sans-serif" }}>Medicines</div>
+            <table className="w-full border-collapse" style={{ fontFamily: "sans-serif" }}>
+              <thead>
+                <tr className="border-b border-slate-300 text-[9px] uppercase tracking-wider text-slate-400">
+                  <th className="text-left pb-1 w-5">#</th>
+                  <th className="text-left pb-1">Medicine</th>
+                  <th className="text-left pb-1 w-12">Dose</th>
+                  <th className="text-left pb-1 w-10">Days</th>
+                </tr>
+              </thead>
+              <tbody>
+                {validMeds.map((m, i) => (
+                  <tr key={m.id} className="border-b border-dashed border-slate-100 align-top">
+                    <td className="py-1.5 text-slate-400 text-[10px]">{i + 1}</td>
+                    <td className="py-1.5">
+                      <div className="text-[11px] font-semibold text-slate-800">{m.medicine_name}{m.dosage ? ` ${m.dosage}` : ""}</div>
+                      <div className="text-[9px] text-slate-400 mt-0.5">{timingDoseStr(m)}{foodStr(m) ? ` · ${foodStr(m)}` : ""}</div>
+                      {m.instructions && <div className="text-[9px] text-slate-400 italic">{m.instructions}</div>}
+                    </td>
+                    <td className="py-1.5 text-[10px] text-slate-600">{timingDoseStr(m)}</td>
+                    <td className="py-1.5 text-[10px] text-slate-600">{m.duration_days}d</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Advice */}
+        {adviceLines.length > 0 && (
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1" style={{ fontFamily: "sans-serif" }}>Advice</div>
+            {adviceLines.map((line, i) => (
+              <div key={i} className="text-[11px] text-slate-700">{line}</div>
+            ))}
+          </div>
+        )}
+
+        {/* Follow-up */}
+        {followupDate && (
+          <div className="bg-green-50 border border-green-100 rounded-lg px-3 py-2 text-[11px]" style={{ fontFamily: "sans-serif" }}>
+            <span className="font-semibold text-green-700">Follow-up Review: </span>
+            <span className="text-green-800">{new Date(followupDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
+          </div>
+        )}
+
+        {/* Doctor signature */}
+        <div className="pt-3 border-t border-slate-200 text-right" style={{ fontFamily: "sans-serif" }}>
+          <div className="text-[11px] font-bold text-slate-800">{doctorName}</div>
+          <div className="text-[9px] text-slate-400 mt-0.5">Signature</div>
+        </div>
+
+        {/* Footer */}
+        <div className="text-center text-[9px] text-slate-300 border-t border-slate-100 pt-2" style={{ fontFamily: "sans-serif" }}>
+          Computer-generated prescription · {clinicName}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 interface PrescriptionWriterProps {
@@ -332,19 +638,29 @@ export function PrescriptionWriter({
   const [form, setForm] = useState({
     chief_complaint: "",
     diagnosis: "",
+    past_history: "",
+    allergies: "",
+    lab_findings: "",
     notes: "",
     dietary_instructions: "",
     precautions: "",
+    followup_date: "",
   });
   const [medicines, setMedicines] = useState<MedicineFormRow[]>([makeEmptyMed()]);
   const [vitalsForm, setVitalsForm] = useState<VisitVitals>({});
 
   // Save state
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]       = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errorMsg, setErrorMsg]   = useState("");
+  const [errors, setErrors]       = useState<Record<string, string>>({});
   const [savedPrescriptionId, setSavedPrescriptionId] = useState("");
+
+  // Right panel tab
+  const [rightTab, setRightTab] = useState<"patient" | "preview">("patient");
+
+  // PDF button
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   // Load patient/prescription for edit or pre-linked modes
   useEffect(() => {
@@ -368,12 +684,16 @@ export function PrescriptionWriter({
           setForm({
             chief_complaint:      v.chief_complaint || "",
             diagnosis:            v.diagnosis || "",
+            past_history:         v.past_history || "",
+            allergies:            v.allergies || "",
+            lab_findings:         v.lab_findings || "",
             notes:                v.notes || "",
             dietary_instructions: pres.dietary_instructions || "",
             precautions:          pres.precautions || "",
+            followup_date:        pres.followup_date || "",
           });
         } else {
-          setForm(f => ({ ...f, dietary_instructions: pres.dietary_instructions || "", precautions: pres.precautions || "" }));
+          setForm(f => ({ ...f, dietary_instructions: pres.dietary_instructions || "", precautions: pres.precautions || "", followup_date: pres.followup_date || "" }));
         }
         const meds: MedicineFormRow[] = ((pres.prescription_medicines ?? []) as any[]).map((m: any) => {
           const bf = !!m.before_food;
@@ -455,10 +775,105 @@ export function PrescriptionWriter({
     setMedicines(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev);
   };
 
-  const appendChip = (field: keyof typeof form, val: string) =>
-    setForm(prev => ({ ...prev, [field]: prev[field] ? `${prev[field]}, ${val}` : val }));
-  const removeChip = (field: keyof typeof form, val: string) =>
-    setForm(prev => ({ ...prev, [field]: prev[field].split(",").map(s => s.trim()).filter(s => s.toLowerCase() !== val.toLowerCase()).join(", ") }));
+
+  // ── AI RECORDER extracted data → form ────────────────────
+  function handleExtracted(data: ExtractedData) {
+    if (data.chief_complaint)       setForm(f => ({ ...f, chief_complaint:       data.chief_complaint! }));
+    if (data.diagnosis)             setForm(f => ({ ...f, diagnosis:             data.diagnosis! }));
+    if (data.past_history)          setForm(f => ({ ...f, past_history:          data.past_history! }));
+    if (data.allergies)             setForm(f => ({ ...f, allergies:             data.allergies! }));
+    if (data.lab_findings)          setForm(f => ({ ...f, lab_findings:          data.lab_findings! }));
+    if (data.dietary_instructions)  setForm(f => ({ ...f, dietary_instructions:  data.dietary_instructions! }));
+    if (data.precautions)           setForm(f => ({ ...f, precautions:           data.precautions! }));
+
+    if (data.vitals) {
+      const v = data.vitals;
+      setVitalsForm(prev => {
+        const next = { ...prev };
+        if (v.temperature) {
+          const t = parseFloat(v.temperature);
+          if (!isNaN(t)) next.temperature_f = String(t);
+        }
+        if (v.bp) {
+          const [sys, dia] = v.bp.split("/");
+          if (sys) next.bp_systolic = sys.trim();
+          if (dia) next.bp_diastolic = dia.trim();
+        }
+        if (v.pulse)  next.pulse_bpm = v.pulse.replace(/\D/g, "");
+        if (v.spo2)   next.spo2_percent = v.spo2.replace(/\D/g, "");
+        if (v.weight) next.weight_kg = v.weight.replace(/[^\d.]/g, "");
+        return next;
+      });
+    }
+
+    if (data.medicines && data.medicines.length > 0) {
+      const newMeds: MedicineFormRow[] = data.medicines.map(m => ({
+        id: crypto.randomUUID(),
+        medicine_name: m.name || "",
+        form: "tablet",
+        dosage: m.strength || "",
+        duration_days: m.duration_days ?? 5,
+        timings: {
+          morning:   { enabled: !!m.morning,   qty: 1, before_food: false },
+          afternoon: { enabled: !!m.afternoon, qty: 1, before_food: false },
+          evening:   { enabled: !!m.evening,   qty: 1, before_food: false },
+          night:     { enabled: !!m.night,     qty: 1, before_food: false },
+        },
+        instructions: m.instructions || "",
+      }));
+      setMedicines(newMeds.length > 0 ? newMeds : [makeEmptyMed()]);
+    }
+  }
+
+  // ── GENERATE PDF ─────────────────────────────────────────
+  const API_BASE = import.meta.env.VITE_API_URL as string;
+
+  async function handleGeneratePdf() {
+    setPdfLoading(true);
+    try {
+      const patName = patient?.name || linkedPatient?.name || walkinName || "";
+      const payload = {
+        clinic_name:           clinicName,
+        doctor_name:           doctorName,
+        patient_name:          patName,
+        patient_age:           patient?.age || linkedPatient?.age || walkinAge || "",
+        patient_gender:        patient?.gender || "",
+        patient_code:          patient?.patient_code || "",
+        visit_date:            new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+        chief_complaint:       form.chief_complaint,
+        diagnosis:             form.diagnosis,
+        dietary_instructions:  form.dietary_instructions,
+        precautions:           form.precautions,
+        notes:                 form.notes,
+        medicines:             medicines.filter(m => m.medicine_name.trim()).map(m => ({
+          medicine_name: m.medicine_name, dosage: m.dosage,
+          morning: m.timings.morning.enabled, afternoon: m.timings.afternoon.enabled,
+          evening: m.timings.evening.enabled, night: m.timings.night.enabled,
+          before_food: m.timings.morning.before_food,
+          duration_days: m.duration_days, instructions: m.instructions,
+        })),
+        vitals: {
+          temperature_f: vitalsForm.temperature_f, weight_kg: vitalsForm.weight_kg,
+          height_cm: vitalsForm.height_cm, spo2_percent: vitalsForm.spo2_percent,
+          bp_systolic: vitalsForm.bp_systolic, bp_diastolic: vitalsForm.bp_diastolic,
+          pulse_bpm: vitalsForm.pulse_bpm,
+        },
+      };
+      const res = await fetch(`${API_BASE}/prescriptions/generate-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`PDF generation failed (${res.status})`);
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    } catch (e: any) {
+      setErrorMsg(e?.message || "PDF generation failed");
+    } finally {
+      setPdfLoading(false);
+    }
+  }
 
   // ── PRINT ───────────────────────────────────────────────
   function handlePrint() {
@@ -547,9 +962,13 @@ export function PrescriptionWriter({
           visit_id: visitId || undefined,
           chief_complaint: form.chief_complaint,
           diagnosis: form.diagnosis,
+          past_history: form.past_history,
+          allergies: form.allergies,
+          lab_findings: form.lab_findings,
           notes: form.notes,
           dietary_instructions: form.dietary_instructions,
           precautions: form.precautions,
+          followup_date: form.followup_date || null,
           medicines: medPayload,
         });
         setSuccessMsg(`Prescription updated!${result.whatsapp_sent ? " WhatsApp sent." : ""}`);
@@ -569,9 +988,13 @@ export function PrescriptionWriter({
         walkin_age:           isWalkin && walkinAge !== "" ? Number(walkinAge) : null,
         chief_complaint:      form.chief_complaint,
         diagnosis:            form.diagnosis,
+        past_history:         form.past_history,
+        allergies:            form.allergies,
+        lab_findings:         form.lab_findings,
         dietary_instructions: form.dietary_instructions,
         precautions:          form.precautions,
         general_notes:        form.notes,
+        followup_date:        form.followup_date || null,
         medicines:            medPayload,
       });
 
@@ -675,10 +1098,12 @@ export function PrescriptionWriter({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-xl text-[12px] font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              onClick={handleGeneratePdf}
+              disabled={pdfLoading}
+              className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-xl text-[12px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
             >
-              <Printer size={13} /> Print
+              {pdfLoading ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
+              {pdfLoading ? "Building…" : "PDF"}
             </button>
             {formActive && (
               <button
@@ -736,7 +1161,12 @@ export function PrescriptionWriter({
           <div className={`space-y-5 transition-opacity ${formActive ? "opacity-100" : "opacity-40 pointer-events-none"}`}>
 
             {/* Visit Details */}
-            <SectionCard icon={<Stethoscope size={16} className="text-blue-600" />} title="Visit Details" accent="bg-blue-50 border-blue-100">
+            <SectionCard
+              icon={<Stethoscope size={16} className="text-blue-600" />}
+              title="Visit Details"
+              accent="bg-blue-50 border-blue-100"
+              headerAction={<AIRecorder onExtracted={handleExtracted} apiBase={API_BASE} />}
+            >
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
                   Chief Complaint <span className="text-red-400">*</span>
@@ -771,13 +1201,6 @@ export function PrescriptionWriter({
                   className={`w-full px-3.5 py-2.5 text-[13px] border rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 transition-shadow ${errors.diagnosis ? "border-red-300 bg-red-50/30" : "border-slate-200 hover:border-slate-300"}`}
                 />
                 {errors.diagnosis && <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={11} /> {errors.diagnosis}</p>}
-                <p className="text-[10px] text-slate-400 mt-1.5 mb-0.5">Quick select:</p>
-                <ChipSuggest
-                  options={DIAGNOSIS_SUGGESTIONS}
-                  currentValue={form.diagnosis}
-                  onSelect={v => setForm(f => ({ ...f, diagnosis: f.diagnosis ? `${f.diagnosis}, ${v}` : v }))}
-                  onDeselect={v => removeChip("diagnosis", v)}
-                />
               </div>
 
               <div>
@@ -787,6 +1210,38 @@ export function PrescriptionWriter({
                   onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                   placeholder="Any additional clinical notes..."
                   className="w-full px-3.5 py-2.5 text-[13px] border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-400 transition-shadow"
+                />
+              </div>
+            </SectionCard>
+
+            {/* History */}
+            <SectionCard icon={<ClipboardList size={16} className="text-purple-500" />} title="History" accent="bg-purple-50 border-purple-100">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Past Medical & Surgical History</label>
+                <textarea
+                  value={form.past_history}
+                  onChange={e => setForm(f => ({ ...f, past_history: e.target.value }))}
+                  placeholder="e.g. Diabetic & hypertensive for 10 years, appendix surgery 15 years ago"
+                  rows={2}
+                  className="w-full px-3.5 py-2.5 text-[13px] border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-400 resize-none transition-shadow"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Allergies</label>
+                <input
+                  value={form.allergies}
+                  onChange={e => setForm(f => ({ ...f, allergies: e.target.value }))}
+                  placeholder="e.g. NKDA / Penicillin allergy"
+                  className="w-full px-3.5 py-2.5 text-[13px] border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-400 transition-shadow"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Lab / Investigation Findings</label>
+                <input
+                  value={form.lab_findings}
+                  onChange={e => setForm(f => ({ ...f, lab_findings: e.target.value }))}
+                  placeholder="e.g. No abnormalities in platelet, WBC normal"
+                  className="w-full px-3.5 py-2.5 text-[13px] border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-400 transition-shadow"
                 />
               </div>
             </SectionCard>
@@ -801,8 +1256,6 @@ export function PrescriptionWriter({
                   placeholder="e.g. Avoid oily and spicy food, drink plenty of fluids"
                   className="w-full px-3.5 py-2.5 text-[13px] border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition-shadow"
                 />
-                <p className="text-[10px] text-slate-400 mt-1.5 mb-0.5">Quick select:</p>
-                <ChipSuggest options={DIETARY_NOTES_OPTIONS} currentValue={form.dietary_instructions} onSelect={v => appendChip("dietary_instructions", v)} onDeselect={v => removeChip("dietary_instructions", v)} />
               </div>
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Precautions</label>
@@ -812,8 +1265,38 @@ export function PrescriptionWriter({
                   placeholder="e.g. Complete bed rest for 2 days"
                   className="w-full px-3.5 py-2.5 text-[13px] border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition-shadow"
                 />
-                <p className="text-[10px] text-slate-400 mt-1.5 mb-0.5">Quick select:</p>
-                <ChipSuggest options={PRECAUTION_OPTIONS} currentValue={form.precautions} onSelect={v => appendChip("precautions", v)} onDeselect={v => removeChip("precautions", v)} />
+              </div>
+            </SectionCard>
+
+            {/* Follow-up */}
+            <SectionCard icon={<Calendar size={16} className="text-green-500" />} title="Follow-up Review" accent="bg-green-50 border-green-100">
+              <div>
+                <div className="flex gap-2 flex-wrap mb-2">
+                  {[3, 5, 7, 14, 30].map(days => {
+                    const d = new Date(); d.setDate(d.getDate() + days);
+                    const val = d.toISOString().split("T")[0];
+                    const active = form.followup_date === val;
+                    return (
+                      <button key={days} type="button"
+                        onClick={() => setForm(f => ({ ...f, followup_date: active ? "" : val }))}
+                        className={`px-3 py-1.5 text-[12px] rounded-lg border font-medium transition-all ${active ? "bg-green-500 border-green-500 text-white" : "bg-white border-slate-200 text-slate-600 hover:border-green-300 hover:text-green-600"}`}>
+                        {days}d
+                      </button>
+                    );
+                  })}
+                </div>
+                <input
+                  type="date"
+                  value={form.followup_date}
+                  min={new Date().toISOString().split("T")[0]}
+                  onChange={e => setForm(f => ({ ...f, followup_date: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 text-[13px] border border-slate-200 hover:border-slate-300 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-green-300 focus:border-green-400 transition-shadow"
+                />
+                {form.followup_date && (
+                  <p className="text-[11px] text-green-600 mt-1">
+                    Review on {new Date(form.followup_date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+                  </p>
+                )}
               </div>
             </SectionCard>
 
@@ -861,10 +1344,12 @@ export function PrescriptionWriter({
               <div className="flex-1" />
               {(isWalkin || savedPrescriptionId) && (
                 <button
-                  onClick={handlePrint}
-                  className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                  onClick={handleGeneratePdf}
+                  disabled={pdfLoading}
+                  className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 rounded-xl text-[13px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
                 >
-                  <Printer size={14} /> Print Prescription
+                  {pdfLoading ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
+                  {pdfLoading ? "Building…" : "PDF Prescription"}
                 </button>
               )}
               {!savedPrescriptionId && (
@@ -881,104 +1366,107 @@ export function PrescriptionWriter({
           </div>
         </div>
 
-        {/* RIGHT — patient info sidebar */}
-        <div className="w-full md:w-72 md:flex-shrink-0 space-y-4">
-          {(patient || linkedPatient) ? (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden sticky top-20">
-              <div className="bg-gradient-to-br from-violet-500 to-purple-600 px-5 py-4">
-                <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center mb-3 text-white text-xl font-bold">
-                  {(patient?.name || linkedPatient?.name || "?")[0]}
-                </div>
-                <div className="text-white font-bold text-[15px] leading-snug">{patient?.name || linkedPatient?.name}</div>
-                {patient?.patient_code && (
-                  <div className="mt-1 inline-flex items-center gap-1 text-[11px] bg-white/20 text-white px-2 py-0.5 rounded-full font-semibold">
-                    <Hash size={9} /> {patient.patient_code}
+        {/* RIGHT — Patient info / Preview tab panel */}
+        <div className="w-full md:w-80 md:flex-shrink-0 space-y-3">
+
+          {/* Tab toggle */}
+          <div className="flex rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden sticky top-20">
+            {(["patient", "preview"] as const).map(tab => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setRightTab(tab)}
+                className={`flex-1 py-2.5 text-[12px] font-semibold transition-colors ${
+                  rightTab === tab
+                    ? "bg-slate-800 text-white"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                {tab === "patient" ? "👤 Patient" : "📄 Preview"}
+              </button>
+            ))}
+          </div>
+
+          {/* Patient tab */}
+          {rightTab === "patient" && (
+            <>
+              {(patient || linkedPatient) ? (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden sticky top-20">
+                  <div className="bg-gradient-to-br from-violet-500 to-purple-600 px-5 py-4">
+                    <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center mb-3 text-white text-xl font-bold">
+                      {(patient?.name || linkedPatient?.name || "?")[0]}
+                    </div>
+                    <div className="text-white font-bold text-[15px] leading-snug">{patient?.name || linkedPatient?.name}</div>
+                    {patient?.patient_code && (
+                      <div className="mt-1 inline-flex items-center gap-1 text-[11px] bg-white/20 text-white px-2 py-0.5 rounded-full font-semibold">
+                        # {patient.patient_code}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="px-5 py-4 space-y-3">
-                {[
-                  { icon: <User size={12} />, label: "Age / Gender", value: [patient?.age || linkedPatient?.age ? `${patient?.age || linkedPatient?.age} yrs` : null, patient?.gender === "M" ? "Male" : patient?.gender === "F" ? "Female" : patient?.gender].filter(Boolean).join(" · ") || "—" },
-                  { icon: <Phone size={12} />, label: "Mobile", value: patient?.mobile || linkedPatient?.mobile || "—" },
-                  { icon: <Globe size={12} />, label: "Language", value: patient?.language ? patient.language.charAt(0).toUpperCase() + patient.language.slice(1) : "English" },
-                ].map(({ icon, label, value }) => (
-                  <div key={label} className="flex items-start gap-2.5">
-                    <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 flex-shrink-0 mt-0.5">{icon}</div>
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{label}</div>
-                      <div className="text-[13px] text-slate-700 font-medium mt-0.5">{value}</div>
+                  <div className="px-5 py-4 space-y-3 text-[13px]">
+                    <div className="text-slate-500">
+                      {[patient?.age || linkedPatient?.age ? `${patient?.age || linkedPatient?.age} yrs` : null,
+                        patient?.gender === "M" ? "Male" : patient?.gender === "F" ? "Female" : patient?.gender
+                      ].filter(Boolean).join(" · ") || "—"}
+                    </div>
+                    <div className="text-slate-500">{patient?.mobile || linkedPatient?.mobile || "—"}</div>
+                    <div className="text-slate-500 capitalize">{patient?.language || "English"}</div>
+                  </div>
+                  <div className="mx-4 mb-4 px-3 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+                      <MessageSquare size={11} /> WhatsApp in <span className="capitalize">{patient?.language || "english"}</span>
                     </div>
                   </div>
-                ))}
-              </div>
-              <div className="mx-4 mb-4 px-3 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
-                  <MessageSquare size={11} /> WhatsApp will be sent in{" "}
-                  <span className="capitalize">{patient?.language || "english"}</span>
                 </div>
-              </div>
-            </div>
-          ) : isWalkin ? (
-            <div className="bg-white rounded-2xl border border-amber-200 p-5 sticky top-20">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center">
-                  <User size={14} className="text-amber-600" />
+              ) : isWalkin ? (
+                <div className="bg-white rounded-2xl border border-amber-200 p-5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center">
+                      <User size={14} className="text-amber-600" />
+                    </div>
+                    <div>
+                      <div className="text-[13px] font-semibold text-slate-700">{walkinName || "Walk-in patient"}</div>
+                      {walkinAge !== "" && <div className="text-[11px] text-slate-400">{walkinAge} yrs</div>}
+                    </div>
+                  </div>
+                  <div className="text-[11px] text-amber-600 mt-2 flex items-center gap-1">
+                    <AlertCircle size={11} /> No WhatsApp — walk-in patient
+                  </div>
                 </div>
-                <div>
-                  <div className="text-[13px] font-semibold text-slate-700">{walkinName || "Walk-in patient"}</div>
-                  {walkinAge !== "" && <div className="text-[11px] text-slate-400">{walkinAge} yrs</div>}
+              ) : (
+                <div className="bg-white rounded-2xl border border-slate-200 p-5">
+                  <div className="text-center py-4">
+                    <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
+                      <User size={20} className="text-slate-400" />
+                    </div>
+                    <p className="text-[13px] text-slate-400">Search for a patient above</p>
+                    <p className="text-[11px] text-slate-300 mt-1">or continue as walk-in</p>
+                  </div>
                 </div>
-              </div>
-              <div className="text-[11px] text-amber-600 mt-2 flex items-center gap-1">
-                <AlertCircle size={11} /> No WhatsApp — walk-in patient
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 sticky top-20">
-              <div className="text-center py-4">
-                <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
-                  <User size={20} className="text-slate-400" />
-                </div>
-                <p className="text-[13px] text-slate-400">Search for a patient above</p>
-                <p className="text-[11px] text-slate-300 mt-1">or continue as walk-in</p>
-              </div>
-            </div>
+              )}
+            </>
           )}
 
-          {/* Summary */}
-          {formActive && (form.chief_complaint || form.diagnosis) && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden sticky top-[290px]">
-              <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-                <FileText size={13} className="text-slate-400" />
-                <span className="text-[12px] font-bold text-slate-600">Summary</span>
-              </div>
-              <div className="px-4 py-3 space-y-2">
-                {form.chief_complaint && (
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Complaint</div>
-                    <div className="text-[12px] text-slate-700 mt-0.5 line-clamp-2">{form.chief_complaint}</div>
-                  </div>
-                )}
-                {form.diagnosis && (
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Diagnosis</div>
-                    <div className="text-[12px] text-slate-700 mt-0.5 font-medium">{form.diagnosis}</div>
-                  </div>
-                )}
-                {medicines.filter(m => m.medicine_name.trim()).length > 0 && (
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Medicines</div>
-                    {medicines.filter(m => m.medicine_name.trim()).map(m => (
-                      <div key={m.id} className="text-[12px] text-slate-700 mt-0.5 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-violet-400 flex-shrink-0" />
-                        {m.medicine_name}
-                        {m.dosage && <span className="text-slate-400 text-[11px]">· {m.dosage}</span>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+          {/* Preview tab */}
+          {rightTab === "preview" && (
+            <PrescriptionPreview
+              clinicName={clinicName}
+              doctorName={doctorName}
+              patientName={patient?.name || linkedPatient?.name || walkinName}
+              patientAge={patient?.age || linkedPatient?.age || walkinAge || undefined}
+              patientGender={patient?.gender || undefined}
+              vitals={vitalsForm}
+              chiefComplaint={form.chief_complaint}
+              diagnosis={form.diagnosis}
+              pastHistory={form.past_history}
+              allergies={form.allergies}
+              labFindings={form.lab_findings}
+              medicines={medicines}
+              dietary={form.dietary_instructions}
+              precautions={form.precautions}
+              notes={form.notes}
+              followupDate={form.followup_date}
+            />
           )}
         </div>
       </div>

@@ -1,5 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
-import { Search, CheckCircle2, Clock, XCircle, Activity, RefreshCw, AlertTriangle, Loader2, UserX, ShieldOff, ChevronDown } from "lucide-react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { Search, CheckCircle2, Clock, XCircle, Activity, RefreshCw, AlertTriangle, Loader2, UserX, ShieldOff, ChevronDown, CalendarRange } from "lucide-react";
 import { useTodayAppointments, useAppointments, useQueue } from "../../../hooks/usePRAData";
 import { useAuth } from "../../../context/AuthContext";
 import { useClinicContext } from "../../../hooks/useClinicContext";
@@ -40,11 +40,12 @@ function getTomorrowDate(): string {
   return d.toISOString().slice(0, 10);
 }
 
-type DerivedStatus = "done" | "in-progress" | "waiting" | "cancelled" | "no-show";
+type DerivedStatus = "done" | "in-progress" | "waiting" | "cancelled" | "no-show" | "late";
 
 function deriveStatus(apt: Appointment, currentToken: number): DerivedStatus {
   if (apt.status === "No-Show") return "no-show";
   if (apt.queue_status === "Cancelled" || apt.status === "Cancelled") return "cancelled";
+  if (apt.status === "Late" || apt.queue_status === "Late") return "late";
   if (apt.queue_status === "In Progress") return "in-progress";
   if (apt.queue_status === "Done" || apt.status === "Completed") return "done";
   if (apt.queue_status === "Waiting") return "waiting";
@@ -67,9 +68,10 @@ const statusConfig: Record<DerivedStatus, { label: string; icon: React.ReactNode
   "waiting":     { label: "Waiting",     icon: <Clock size={11} />,        cls: "bg-amber-50 text-amber-700 border border-amber-200" },
   "cancelled":   { label: "Cancelled",   icon: <XCircle size={11} />,      cls: "bg-rose-50 text-rose-600 border border-rose-200" },
   "no-show":     { label: "No Show",     icon: <UserX size={11} />,        cls: "bg-orange-50 text-orange-600 border border-orange-200" },
+  "late":        { label: "Late",        icon: <Clock size={11} />,        cls: "bg-orange-50 text-orange-700 border border-orange-200" },
 };
 
-type DateTab = "today" | "tomorrow" | "week" | "all";
+type DateTab = "today" | "tomorrow" | "week" | "range";
 type StatusFilter = "all" | DerivedStatus;
 
 function isSelectable(status: DerivedStatus): boolean {
@@ -85,9 +87,10 @@ function canSelect(status: DerivedStatus): boolean {
 const STATUS_ORDER: Record<DerivedStatus, number> = {
   "in-progress": 0,
   waiting:       1,
-  done:          2,
-  "no-show":     3,
-  cancelled:     4,
+  late:          2,
+  done:          3,
+  "no-show":     4,
+  cancelled:     5,
 };
 
 function tokenNum(token?: string | number | null): number {
@@ -208,16 +211,39 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
 
   const weekRange = useMemo(() => getThisWeekRange(), []);
   const tomorrowDate = useMemo(() => getTomorrowDate(), []);
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  // Range picker state — input* are staged values; rangeFrom/rangeTo commit on Apply
+  const [rangeFrom, setRangeFrom]       = useState(todayStr);
+  const [rangeTo, setRangeTo]           = useState(todayStr);
+  const [inputFrom, setInputFrom]       = useState(todayStr);
+  const [inputTo, setInputTo]           = useState(todayStr);
+  const [rangeOpen, setRangeOpen]       = useState(false);
+  const rangeRef = useRef<HTMLDivElement>(null);
+
+  const applyRange = () => {
+    setRangeFrom(inputFrom);
+    setRangeTo(inputTo);
+    setRangeOpen(false);
+  };
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (rangeRef.current && !rangeRef.current.contains(e.target as Node)) setRangeOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const todayHook    = useTodayAppointments(selectedDoctorId);
   const tomorrowHook = useAppointments(tomorrowDate, undefined, undefined, selectedDoctorId);
   const weekHook     = useAppointments(undefined, weekRange.dateFrom, weekRange.dateTo, selectedDoctorId);
-  const allHook      = useAppointments(undefined, undefined, undefined, selectedDoctorId);
+  const rangeHook    = useAppointments(undefined, rangeFrom, rangeTo, selectedDoctorId);
 
   const activeHook =
     dateTab === "today"    ? todayHook    :
     dateTab === "tomorrow" ? tomorrowHook :
-    dateTab === "week"     ? weekHook     : allHook;
+    dateTab === "week"     ? weekHook     : rangeHook;
 
   const { data: rawAppointments, loading, error, refetch } = activeHook;
 
@@ -262,6 +288,7 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
     waiting:       appointments.filter(a => a.derivedStatus === "waiting").length,
     cancelled:     appointments.filter(a => a.derivedStatus === "cancelled").length,
     "no-show":     appointments.filter(a => a.derivedStatus === "no-show").length,
+    late:          appointments.filter(a => a.derivedStatus === "late").length,
   }), [appointments]);
 
   // Selectable rows = waiting only (not done / in-progress / cancelled)
@@ -459,7 +486,7 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
       {error && (
         <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
           <span className="text-[13px] text-rose-700 flex-1">Failed to load appointments.</span>
-          <button onClick={refetch} className="flex items-center gap-1 text-[12px] font-semibold text-rose-600">
+          <button onClick={() => refetch()} className="flex items-center gap-1 text-[12px] font-semibold text-rose-600">
             <RefreshCw size={13} /> Retry
           </button>
         </div>
@@ -490,8 +517,8 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
       {/* Date tabs + Status filter row */}
       <div className="flex items-center justify-between gap-4">
         {/* Date tabs */}
-        <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1">
-          {(["today", "tomorrow", "week", "all"] as DateTab[]).map(tab => (
+        <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1 relative">
+          {(["today", "tomorrow", "week"] as DateTab[]).map(tab => (
             <button
               key={tab}
               onClick={() => handleTabChange(tab)}
@@ -501,14 +528,63 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
                   : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              {tab === "today" ? "Today" : tab === "tomorrow" ? "Tomorrow" : tab === "week" ? "This Week" : "All"}
+              {tab === "today" ? "Today" : tab === "tomorrow" ? "Tomorrow" : "This Week"}
             </button>
           ))}
+          {/* Range picker */}
+          <div ref={rangeRef} className="relative">
+            <button
+              onClick={() => { handleTabChange("range"); setRangeOpen(v => !v); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all ${
+                dateTab === "range"
+                  ? "bg-emerald-500 text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <CalendarRange size={12} />
+              {dateTab === "range" && rangeFrom !== rangeTo
+                ? `${rangeFrom.slice(5)} – ${rangeTo.slice(5)}`
+                : dateTab === "range"
+                ? rangeFrom.slice(5)
+                : "Range"}
+            </button>
+            {rangeOpen && (
+              <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-lg p-4 w-56">
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-500 block mb-1">From</label>
+                    <input
+                      type="date"
+                      value={inputFrom}
+                      onChange={e => { setInputFrom(e.target.value); if (e.target.value > inputTo) setInputTo(e.target.value); }}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-[12px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-500 block mb-1">To</label>
+                    <input
+                      type="date"
+                      value={inputTo}
+                      min={inputFrom}
+                      onChange={e => setInputTo(e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-[12px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                    />
+                  </div>
+                  <button
+                    onClick={applyRange}
+                    className="w-full py-2 bg-emerald-500 text-white text-[12px] font-semibold rounded-lg hover:bg-emerald-600 transition-colors"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Status filter pills */}
         <div className="flex gap-2">
-          {(["all", "in-progress", "waiting", "done", "no-show", "cancelled"] as StatusFilter[]).map(f => (
+          {(["all", "in-progress", "waiting", "late", "done", "no-show", "cancelled"] as StatusFilter[]).map(f => (
             <button
               key={f}
               onClick={() => setStatusFilter(f)}
@@ -518,7 +594,7 @@ export function Appointments({ onNewAppointment, onPrescribe }: { onNewAppointme
                   : "bg-white border border-slate-200 text-slate-500 hover:border-emerald-300 hover:text-emerald-600"
               }`}
             >
-              {f === "in-progress" ? "In Progress" : f === "no-show" ? "No Show" : f === "done" ? "Seen" : f.charAt(0).toUpperCase() + f.slice(1)}{" "}
+              {f === "in-progress" ? "In Progress" : f === "no-show" ? "No Show" : f === "done" ? "Seen" : f === "late" ? "Late" : f.charAt(0).toUpperCase() + f.slice(1)}{" "}
               <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded-full ${statusFilter === f ? "bg-white/25" : "bg-slate-100 text-slate-400"}`}>
                 {counts[f]}
               </span>

@@ -25,8 +25,8 @@ import { ConsultationsPage } from "./components/pages/ConsultationsPage";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
-export default function App() {
-  const { doctorId, user, loading: authLoading } = useAuth();
+function AppShell() {
+  const { doctorId } = useAuth();
   const [activePage, setActivePage] = useState<Page>("dashboard");
   const [newApptPatientId, setNewApptPatientId] = useState<string>("");
   const [rxParams, setRxParams] = useState<{ patientId?: string; appointmentId?: string; prescriptionId?: string }>({});
@@ -36,7 +36,7 @@ export default function App() {
   const [consultationsBadge, setConsultationsBadge] = useState(0);
 
   const queriesBadge     = queries.filter(q => q.status === "Pending").length;
-  const followupsBadge   = followUps.filter(f => !f.completed_at).length;
+  const followupsBadge   = followUps.filter(f => !f.completed_at && (f.call_status === "Pending" || f.call_status === "Whatsapp-Sent")).length;
   const appointmentsBadge = todayAppointments.filter(a => a.status !== "Cancelled").length;
 
   // Poll today's active consultations for badge count
@@ -112,16 +112,6 @@ export default function App() {
     }
   };
 
-  // Auth gate
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-  if (!user) return <Login />;
-
   return (
     <div className="min-h-screen bg-slate-50" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       <Sidebar
@@ -140,4 +130,19 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+export default function App() {
+  const { user, loading: authLoading } = useAuth();
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!user) return <Login />;
+
+  return <AppShell />;
 }

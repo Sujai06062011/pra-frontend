@@ -30,6 +30,7 @@ const statusConfig = {
   done: { label: "Seen", icon: <CheckCircle2 size={12} />, cls: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
   "in-progress": { label: "In Progress", icon: <Activity size={12} />, cls: "bg-blue-50 text-blue-700 border border-blue-200" },
   waiting: { label: "Waiting", icon: <Clock size={12} />, cls: "bg-amber-50 text-amber-700 border border-amber-200" },
+  late: { label: "Late", icon: <Clock size={12} />, cls: "bg-orange-50 text-orange-700 border border-orange-200" },
   cancelled: { label: "Cancelled", icon: <XCircle size={12} />, cls: "bg-rose-50 text-rose-700 border border-rose-200" },
   "no-show": { label: "No Show", icon: <XCircle size={12} />, cls: "bg-orange-50 text-orange-600 border border-orange-200" },
 };
@@ -117,6 +118,7 @@ function DashboardApptRows({ appts, currentToken }: { appts: ReturnType<typeof u
     const mappedStatus: string =
       apt.status === "No-Show"                                       ? "no-show" :
       apt.queue_status === "Cancelled" || apt.status === "Cancelled" ? "cancelled" :
+      apt.status === "Late" || apt.queue_status === "Late"           ? "late" :
       apt.queue_status === "In Progress"                             ? "in-progress" :
       apt.queue_status === "Done" || apt.status === "Completed"      ? "done" :
       apt.queue_status === "Waiting"                                 ? "waiting" :

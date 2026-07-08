@@ -74,8 +74,15 @@ function tokenNum(tok?: string | number | null): number {
 
 function sortQueue(appts: Appointment[], currentServingTime?: string): Appointment[] {
   return [...appts].sort((a, b) => {
-    const sd = (Q_ORDER[queueStatus(a, currentServingTime)] ?? 9) - (Q_ORDER[queueStatus(b, currentServingTime)] ?? 9);
-    return sd !== 0 ? sd : tokenNum(a.display_token ?? a.token_number) - tokenNum(b.display_token ?? b.token_number);
+    const qa = queueStatus(a, currentServingTime);
+    const qb = queueStatus(b, currentServingTime);
+    const sd = (Q_ORDER[qa] ?? 9) - (Q_ORDER[qb] ?? 9);
+    if (sd !== 0) return sd;
+    // Within returned-past: sort by returned_at (who came back first)
+    if (qa === "returned-past" && qb === "returned-past") {
+      return (a.returned_at ?? "").localeCompare(b.returned_at ?? "");
+    }
+    return tokenNum(a.display_token ?? a.token_number) - tokenNum(b.display_token ?? b.token_number);
   });
 }
 
@@ -205,7 +212,8 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
 
   // Late state
   const [lateBusyIds, setLateBusyIds] = useState<Set<string>>(new Set());
-  const [optimisticLates, setOptimisticLates] = useState<Map<string, "Late" | "returned">>(new Map());
+  // Map value: "Late" | ISO timestamp string (returned_at captured at click time)
+  const [optimisticLates, setOptimisticLates] = useState<Map<string, "Late" | string>>(new Map());
 
   // Optimistic-patched list used for ALL queue logic and display
   const patchedAppointments = appointments.map(p => {
@@ -214,7 +222,7 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
     if (!terminal && optimisticNoShows.has(p.id)) return { ...p, status: "No-Show" as const };
     const lateOpt = !terminal && optimisticLates.get(p.id);
     if (lateOpt === "Late") return { ...p, status: "Late" as const };
-    if (lateOpt === "returned") return { ...p, status: "Confirmed" as const, returned_at: new Date().toISOString() };
+    if (lateOpt && lateOpt !== "Late") return { ...p, status: "Confirmed" as const, returned_at: lateOpt };
     return p;
   });
 
@@ -323,7 +331,7 @@ export function Queue({ onPrescribe }: { onPrescribe?: (patientId: string, appoi
 
   const handleMarkReturned = useCallback(async (appt: Appointment) => {
     setLateBusyIds(prev => new Set(prev).add(appt.id));
-    setOptimisticLates(prev => new Map(prev).set(appt.id, "returned"));
+    setOptimisticLates(prev => new Map(prev).set(appt.id, new Date().toISOString()));
     try {
       await api.appointments.markReturned(appt.id);
       const token = appt.display_token || appt.token_number || "";

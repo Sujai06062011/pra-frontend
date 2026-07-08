@@ -137,7 +137,7 @@ export function Sidebar({
         {/* Clinic badge */}
         <div className="mt-4 px-3 py-2.5 bg-emerald-50 border border-emerald-100 rounded-xl">
           <div className="text-xs font-semibold text-emerald-700">TrueCare Family Clinic</div>
-          {user && <div className="text-[11px] text-slate-500 mt-0.5">{user.name} · {user.role}</div>}
+          {user && <div className="text-[11px] text-slate-500 mt-0.5">{user.name} · {user.speciality || user.role}</div>}
         </div>
       </div>
 

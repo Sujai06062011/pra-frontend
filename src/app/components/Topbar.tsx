@@ -1,4 +1,5 @@
-import { Bell, Search, Calendar, LogOut } from "lucide-react";
+import { Bell, Search, Calendar, LogOut, Clock } from "lucide-react";
+import { useState, useEffect } from "react";
 import type { Page } from "./Sidebar";
 import { useAuth } from "../../context/AuthContext";
 
@@ -26,13 +27,23 @@ const pageTitles: Record<Page, string> = {
 
 export function Topbar({ activePage }: { activePage: Page }) {
   const { user, logout } = useAuth();
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
   if (activePage === "settings" && user?.role === "doctor") {
     pageTitles["settings"] = "Doctor Settings";
   } else {
     pageTitles["settings"] = "Clinic Settings";
   }
-  const now = new Date();
+
   const dateStr = now.toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+  const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+
+  const roleLabel = user?.speciality || (user?.role === "doctor" ? "General Physician" : user?.role ?? "");
 
   return (
     <header className="h-16 bg-white border-b border-slate-100 flex items-center px-7 gap-4 sticky top-0 z-40 shadow-sm pl-16 md:pl-7">
@@ -52,10 +63,13 @@ export function Topbar({ activePage }: { activePage: Page }) {
         />
       </div>
 
-      {/* Date */}
-      <div className="hidden lg:flex items-center gap-1.5 text-[12px] text-slate-500 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
+      {/* Date + Time */}
+      <div className="hidden lg:flex items-center gap-2 text-[12px] text-slate-500 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
         <Calendar size={13} className="text-emerald-500" />
         {dateStr}
+        <span className="w-px h-3 bg-slate-300" />
+        <Clock size={13} className="text-emerald-500" />
+        <span className="font-medium text-slate-600 tabular-nums">{timeStr}</span>
       </div>
 
       {/* Live dot */}
@@ -78,7 +92,7 @@ export function Topbar({ activePage }: { activePage: Page }) {
         <div className="hidden md:flex items-center gap-2 pl-2 border-l border-slate-200">
           <div className="text-right">
             <p className="text-[12px] font-semibold text-slate-700 leading-tight">{user.name}</p>
-            <p className="text-[11px] text-slate-400 capitalize">{user.role}</p>
+            <p className="text-[11px] text-slate-400">{roleLabel}</p>
           </div>
           <button
             onClick={logout}

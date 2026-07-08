@@ -108,10 +108,21 @@ export function useQueue(doctorIdOverride?: string) {
 export function useAppointments(date?: string, dateFrom?: string, dateTo?: string, doctorIdOverride?: string) {
   const { doctorId: authDoctorId } = useAuth();
   const doctorId = doctorIdOverride ?? authDoctorId;
-  return useApiData<Appointment[]>(
-    () => api.appointments.list(doctorId, date, dateFrom, dateTo),
-    []
-  );
+  const [data, setData] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try { setData(await api.appointments.list(doctorId, date, dateFrom, dateTo)); }
+    catch (e) { setError(e instanceof Error ? e.message : "Unknown error"); }
+    finally { setLoading(false); }
+  }, [doctorId, date, dateFrom, dateTo]);
+
+  useEffect(() => { refetch(); }, [refetch]);
+
+  return { data, loading, error, refetch };
 }
 
 export function useTodayAppointments(doctorIdOverride?: string) {
@@ -121,17 +132,17 @@ export function useTodayAppointments(doctorIdOverride?: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refetch = useCallback(async () => {
-    setLoading(true);
+  const refetch = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try { setData(await api.appointments.today(doctorId)); }
     catch (e) { setError(e instanceof Error ? e.message : "Unknown error"); }
-    finally { setLoading(false); }
+    finally { if (!silent) setLoading(false); }
   }, [doctorId]);
 
   useEffect(() => {
     refetch();
-    const t = setInterval(refetch, 30_000);
+    const t = setInterval(() => refetch(true), 30_000);
     return () => clearInterval(t);
   }, [refetch]);
 
