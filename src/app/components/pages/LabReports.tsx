@@ -35,6 +35,19 @@ interface Counts {
   total: number;
 }
 
+interface OrderRow {
+  id: string;
+  test_name: string;
+  test_category?: string;
+  priority: string;
+  lab_type: string;
+  lab_name?: string;
+  status: string;
+  notes?: string;
+  ordered_at: string;
+  patients?: { name: string; age?: number; patient_code?: string };
+}
+
 type FilterTab = "all" | "my_orders" | "patient_initiated" | "preprocedure";
 
 const STATUS_META: Record<string, { label: string; cls: string; rowCls: string; icon: React.ReactNode }> = {
@@ -68,6 +81,7 @@ export function LabReports() {
   const { doctorId } = useAuth();
 
   const [reports, setReports] = useState<ReportRow[]>([]);
+  const [orders, setOrders] = useState<OrderRow[]>([]);
   const [counts, setCounts] = useState<Counts>({ critical: 0, needs_review: 0, pending_review: 0, reviewed: 0, total: 0 });
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,15 +96,19 @@ export function LabReports() {
     if (!doctorId) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({ doctor_id: doctorId });
-      if (filterStatus) params.set("status", filterStatus);
-      if (filterTab === "my_orders") params.set("source", "dashboard_upload");
-      if (filterTab === "patient_initiated") params.set("source", "whatsapp_patient");
-      if (filterTab === "preprocedure") params.set("priority", "Pre-procedure");
+      if (filterTab === "my_orders") {
+        const data = await fetch(`${BASE_URL}/api/lab/orders?doctor_id=${doctorId}`).then(r => r.json());
+        setOrders(data.orders || []);
+      } else {
+        const params = new URLSearchParams({ doctor_id: doctorId });
+        if (filterStatus) params.set("status", filterStatus);
+        if (filterTab === "patient_initiated") params.set("source", "whatsapp_patient");
+        if (filterTab === "preprocedure") params.set("priority", "Pre-procedure");
 
-      const data = await fetch(`${BASE_URL}/api/lab/reports?${params}`).then(r => r.json());
-      setReports(data.reports || []);
-      setCounts(data.counts || { critical: 0, needs_review: 0, pending_review: 0, reviewed: 0, total: 0 });
+        const data = await fetch(`${BASE_URL}/api/lab/reports?${params}`).then(r => r.json());
+        setReports(data.reports || []);
+        setCounts(data.counts || { critical: 0, needs_review: 0, pending_review: 0, reviewed: 0, total: 0 });
+      }
     } catch {
       // keep existing data on error
     } finally {
@@ -188,7 +206,81 @@ export function LabReports() {
           ))}
         </div>
 
-        {/* Table */}
+        {/* Orders table — My Orders tab */}
+        {filterTab === "my_orders" && (
+          <div className="overflow-x-auto">
+            <table className="min-w-[700px] w-full">
+              <thead>
+                <tr className="bg-slate-50">
+                  {["Patient", "Test", "Category", "Priority", "Lab", "Status", "Ordered"].map(h => (
+                    <th key={h} className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-slate-400 px-5 py-3 border-b border-slate-100">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={7} className="px-5 py-12 text-center text-[13px] text-slate-400">
+                    <RefreshCw size={20} className="mx-auto mb-2 animate-spin text-indigo-300" /> Loading orders…
+                  </td></tr>
+                ) : orders.length === 0 ? (
+                  <tr><td colSpan={7} className="px-5 py-12 text-center text-[13px] text-slate-400">
+                    <FlaskConical size={28} className="mx-auto mb-2 text-slate-200" /> No orders yet
+                  </td></tr>
+                ) : orders.map(o => {
+                  const pat = o.patients;
+                  const color = getColor(pat?.name || "?");
+                  const priorityCls: Record<string, string> = {
+                    "Routine": "bg-slate-100 text-slate-600",
+                    "Urgent": "bg-amber-50 text-amber-600",
+                    "STAT": "bg-rose-50 text-rose-600",
+                    "Pre-procedure": "bg-blue-50 text-blue-600",
+                  };
+                  const statusCls: Record<string, string> = {
+                    "Ordered": "bg-blue-50 text-blue-600 border-blue-200",
+                    "Collected": "bg-purple-50 text-purple-600 border-purple-200",
+                    "Processing": "bg-amber-50 text-amber-600 border-amber-200",
+                    "Ready": "bg-emerald-50 text-emerald-600 border-emerald-200",
+                    "Delivered": "bg-slate-100 text-slate-500 border-slate-200",
+                  };
+                  return (
+                    <tr key={o.id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center text-white text-[12px] font-bold shadow-sm shrink-0`}>
+                            {(pat?.name || "?")[0]}
+                          </div>
+                          <div>
+                            <div className="text-[13px] font-medium text-slate-800">{pat?.name || "—"}</div>
+                            {pat?.age && <div className="text-[11px] text-slate-400">{pat.age} yrs{pat.patient_code ? ` · ${pat.patient_code}` : ""}</div>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-[12px] font-medium text-slate-700">{o.test_name}</td>
+                      <td className="px-5 py-3.5 text-[12px] text-slate-500">{o.test_category || "—"}</td>
+                      <td className="px-5 py-3.5">
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${priorityCls[o.priority] || "bg-slate-100 text-slate-500"}`}>
+                          {o.priority}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-[12px] text-slate-500">{o.lab_name || (o.lab_type === "inhouse" ? "In-house" : "—")}</td>
+                      <td className="px-5 py-3.5">
+                        <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-semibold border ${statusCls[o.status] || "bg-slate-50 text-slate-500 border-slate-200"}`}>
+                          {o.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-[12px] text-slate-400">
+                        {o.ordered_at ? new Date(o.ordered_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Reports table — all other tabs */}
+        {filterTab !== "my_orders" && (
         <div className="overflow-x-auto">
           <table className="min-w-[700px] w-full">
             <thead>
@@ -280,6 +372,7 @@ export function LabReports() {
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       {/* Modals */}

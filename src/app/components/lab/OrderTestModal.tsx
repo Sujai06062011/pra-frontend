@@ -188,7 +188,6 @@ export function OrderTestModal({ doctorId, patients, onClose, onSuccess }: Props
               <div className="space-y-1.5">
                 <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Lab Type</label>
                 <div className="flex rounded-xl border border-slate-200 p-1 gap-1">
-                  {[["external", "External Lab"], ["inhouse", "In-house Lab"]] as const}
                   {(["external", "inhouse"] as const).map(lt => (
                     <button key={lt} onClick={() => setLabType(lt)}
                       className={`flex-1 py-2 rounded-lg text-[12px] font-semibold transition-all ${
