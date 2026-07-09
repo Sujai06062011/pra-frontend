@@ -7,6 +7,22 @@ import { LabTrendChart } from "./LabTrendChart";
 
 const BASE_URL = import.meta.env.VITE_API_URL as string;
 
+// Parameters worth showing trend charts for (must have 2+ history points)
+const TREND_TRACKED = new Set([
+  "wbc", "hgb", "hemoglobin", "platelets",
+  "hba1c", "fasting glucose", "fasting blood sugar", "post prandial glucose",
+  "creatinine", "urea", "uric acid", "egfr",
+  "alt", "sgpt", "ast", "sgot", "bilirubin total",
+  "total cholesterol", "ldl", "hdl", "triglycerides",
+  "tsh", "vitamin d", "vitamin b12",
+  "ferritin", "iron", "hs-crp", "crp",
+]);
+
+function shouldShowTrend(paramName: string): boolean {
+  const lower = paramName.toLowerCase();
+  return [...TREND_TRACKED].some(key => lower.includes(key));
+}
+
 interface ParamRow {
   id: string;
   parameter_name: string;
@@ -45,12 +61,6 @@ interface Props {
 
 const STATUS_OPTS = ["Pending Review", "Needs Review", "Critical", "Reviewed"];
 
-const statusRowCls = (status: string) => {
-  if (status.includes("Critical")) return "bg-rose-50";
-  if (status === "High" || status === "Low") return "bg-amber-50/60";
-  return "";
-};
-
 const statusBadgeCls = (status: string) => {
   if (status.includes("Critical")) return "bg-rose-100 text-rose-700 border-rose-200";
   if (status === "High" || status === "Low") return "bg-amber-100 text-amber-700 border-amber-200";
@@ -64,6 +74,52 @@ const sourceBadge: Record<string, { label: string; icon: string; cls: string }> 
   inhouse_lab:      { label: "In-house",  icon: "🏥", cls: "bg-teal-50 text-teal-600 border-teal-200" },
 };
 
+const reportStatusCls: Record<string, string> = {
+  "Critical":       "bg-rose-50 text-rose-700 border-rose-200",
+  "Needs Review":   "bg-amber-50 text-amber-700 border-amber-200",
+  "Pending Review": "bg-blue-50 text-blue-700 border-blue-200",
+  "Reviewed":       "bg-emerald-50 text-emerald-700 border-emerald-200",
+};
+
+function ParamTable({ rows, highlightRow }: { rows: ParamRow[]; highlightRow?: (p: ParamRow) => string }) {
+  return (
+    <table className="w-full text-[12px]">
+      <thead>
+        <tr className="bg-slate-50 border-b border-slate-100">
+          {["Parameter", "Value", "Unit", "Reference", "Status"].map(h => (
+            <th key={h} className="text-left px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              {h}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(p => (
+          <tr key={p.id} className={`border-b border-slate-50 ${highlightRow ? highlightRow(p) : ""}`}>
+            <td className="px-3 py-2 font-medium text-slate-700">{p.parameter_name}</td>
+            <td className={`px-3 py-2 font-bold ${
+              p.status.includes("Critical") ? "text-rose-600"
+              : p.status !== "Normal" ? "text-amber-600"
+              : "text-slate-700"
+            }`}>
+              {p.value}
+            </td>
+            <td className="px-3 py-2 text-slate-400">{p.unit || "—"}</td>
+            <td className="px-3 py-2 text-slate-400">
+              {p.ref_low != null && p.ref_high != null ? `${p.ref_low}–${p.ref_high}` : "—"}
+            </td>
+            <td className="px-3 py-2">
+              <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusBadgeCls(p.status)}`}>
+                {p.status}
+              </span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export function ReportDetailModal({ reportId, doctorId, onClose, onUpdated }: Props) {
   const [data, setData] = useState<ReportDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,6 +128,7 @@ export function ReportDetailModal({ reportId, doctorId, onClose, onUpdated }: Pr
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [sentOk, setSentOk] = useState(false);
+  const [showNormals, setShowNormals] = useState(false);
   const [showTrend, setShowTrend] = useState(false);
 
   useEffect(() => {
@@ -142,27 +199,30 @@ export function ReportDetailModal({ reportId, doctorId, onClose, onUpdated }: Pr
 
   if (!data) return null;
 
-  const r = data.report;
-  const pat = data.patient;
-  const params = data.extracted_values || [];
-  const trends = data.trend || [];
-  const pdfUrl = r.pdf_url || "";
-  const imgUrl = r.image_url || "";
-  const src = sourceBadge[r.report_source] || sourceBadge.dashboard_upload;
-  const criticalCount = params.filter(p => p.status?.includes("Critical")).length;
-  const abnormalParams = params.filter(p => p.status !== "Normal");
+  const r        = data.report;
+  const pat      = data.patient;
+  const params   = data.extracted_values || [];
+  const trends   = data.trend || [];
+  const pdfUrl   = r.pdf_url || "";
+  const imgUrl   = r.image_url || "";
+  const src      = sourceBadge[r.report_source] || sourceBadge.dashboard_upload;
+
+  // Group by status
+  const criticalParams = params.filter(p => p.status?.includes("Critical"));
+  const abnormalParams = params.filter(p => p.status === "High" || p.status === "Low");
   const normalParams   = params.filter(p => p.status === "Normal");
 
-  const reportStatusCls: Record<string, string> = {
-    "Critical":       "bg-rose-50 text-rose-700 border-rose-200",
-    "Needs Review":   "bg-amber-50 text-amber-700 border-amber-200",
-    "Pending Review": "bg-blue-50 text-blue-700 border-blue-200",
-    "Reviewed":       "bg-emerald-50 text-emerald-700 border-emerald-200",
-  };
+  // Trend charts: only tracked parameters with 2+ history points
+  const trendMap = new Map(trends.map(t => [t.parameter_name.toLowerCase(), t]));
+  const visibleTrends = params
+    .filter(p => shouldShowTrend(p.parameter_name))
+    .map(p => trendMap.get(p.parameter_name.toLowerCase()))
+    .filter((t): t is TrendEntry => !!t && t.history.length >= 2);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
+
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 border-b border-slate-100 shrink-0">
           <div>
@@ -194,9 +254,9 @@ export function ReportDetailModal({ reportId, doctorId, onClose, onUpdated }: Pr
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6">
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
 
-          {/* PDF / image */}
+          {/* PDF / image link */}
           {(pdfUrl || imgUrl) && (
             <div className="flex gap-2">
               {pdfUrl && (
@@ -214,68 +274,92 @@ export function ReportDetailModal({ reportId, doctorId, onClose, onUpdated }: Pr
             </div>
           )}
 
-          {/* Summary */}
+          {/* Summary banner */}
           {r.result_summary && (
             <div className="bg-slate-50 rounded-xl px-4 py-3 text-[13px] text-slate-600 border border-slate-100">
               {r.result_summary}
             </div>
           )}
 
-          {/* Parameters table */}
+          {/* Parameter count header */}
           {params.length > 0 && (
-            <div>
-              <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                Results ({params.length} parameters)
-              </h3>
-              <div className="rounded-xl border border-slate-100 overflow-hidden">
-                <table className="w-full text-[12px]">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-100">
-                      {["Parameter", "Value", "Unit", "Reference", "Status"].map(h => (
-                        <th key={h} className="text-left px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {params.map(p => (
-                      <tr key={p.id} className={`border-b border-slate-50 ${statusRowCls(p.status)}`}>
-                        <td className="px-3 py-2 font-medium text-slate-700">{p.parameter_name}</td>
-                        <td className={`px-3 py-2 font-bold ${p.status.includes("Critical") ? "text-rose-600" : p.status !== "Normal" ? "text-amber-600" : "text-slate-700"}`}>
-                          {p.value}
-                        </td>
-                        <td className="px-3 py-2 text-slate-400">{p.unit || "—"}</td>
-                        <td className="px-3 py-2 text-slate-400">
-                          {p.ref_low != null && p.ref_high != null ? `${p.ref_low}–${p.ref_high}` : "—"}
-                        </td>
-                        <td className="px-3 py-2">
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusBadgeCls(p.status)}`}>
-                            {p.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                {params.length} parameters extracted
+              </span>
+              {criticalParams.length > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-100 text-rose-700 border border-rose-200">
+                  🔴 {criticalParams.length} Critical
+                </span>
+              )}
+              {abnormalParams.length > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                  ⚠️ {abnormalParams.length} Abnormal
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                ✅ {normalParams.length} Normal
+              </span>
             </div>
           )}
 
-          {/* Trend charts */}
-          {trends.length > 0 && (
+          {/* Critical section */}
+          {criticalParams.length > 0 && (
+            <div className="rounded-xl border border-rose-200 overflow-hidden">
+              <div className="bg-rose-50 px-3 py-2 flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-rose-700 uppercase tracking-wider">
+                  🔴 Critical Values
+                </span>
+              </div>
+              <ParamTable rows={criticalParams} />
+            </div>
+          )}
+
+          {/* Abnormal section */}
+          {abnormalParams.length > 0 && (
+            <div className="rounded-xl border border-amber-200 overflow-hidden">
+              <div className="bg-amber-50 px-3 py-2">
+                <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider">
+                  ⚠️ Needs Attention
+                </span>
+              </div>
+              <ParamTable rows={abnormalParams} />
+            </div>
+          )}
+
+          {/* Normal section — collapsed accordion */}
+          {normalParams.length > 0 && (
+            <div className="rounded-xl border border-slate-100 overflow-hidden">
+              <button
+                onClick={() => setShowNormals(v => !v)}
+                className="w-full flex items-center justify-between px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors"
+              >
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  ✅ {normalParams.length} Normal Parameters
+                </span>
+                <ChevronDown
+                  size={14}
+                  className={`text-slate-400 transition-transform ${showNormals ? "rotate-180" : ""}`}
+                />
+              </button>
+              {showNormals && <ParamTable rows={normalParams} />}
+            </div>
+          )}
+
+          {/* Trend charts — key parameters only, 2+ history */}
+          {visibleTrends.length > 0 && (
             <div>
               <button
                 onClick={() => setShowTrend(v => !v)}
                 className="flex items-center gap-2 text-[12px] font-semibold text-indigo-600 hover:text-indigo-800 mb-3"
               >
                 <TrendingUp size={14} />
-                {showTrend ? "Hide" : "Show"} Trend Charts ({trends.length} parameters)
+                {showTrend ? "Hide" : "Show"} Trend Charts ({visibleTrends.length} parameters)
                 <ChevronDown size={14} className={`transition-transform ${showTrend ? "rotate-180" : ""}`} />
               </button>
               {showTrend && (
                 <div className="space-y-6 border border-slate-100 rounded-xl p-4 bg-slate-50/50">
-                  {trends.map(t => (
+                  {visibleTrends.map(t => (
                     <LabTrendChart key={t.parameter_name} {...t} unit={t.unit || ""} />
                   ))}
                 </div>
@@ -319,7 +403,7 @@ export function ReportDetailModal({ reportId, doctorId, onClose, onUpdated }: Pr
           </div>
         </div>
 
-        {/* Footer actions */}
+        {/* Footer */}
         <div className="px-6 py-4 border-t border-slate-100 flex gap-3 shrink-0">
           <button
             onClick={sendToPatient}
